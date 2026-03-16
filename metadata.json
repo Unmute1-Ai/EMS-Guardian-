@@ -1,0 +1,8 @@
+{
+  "name": "Guardian EMS AI",
+  "description": "Real-time multimodal AI assistant for emergency medical responders, providing hands-free protocol guidance and scene analysis.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
