@@ -3,7 +3,13 @@ import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error';
 
-export function useGeminiLive(customInstruction?: string) {
+export interface Hazard {
+  type: string;
+  box: [number, number, number, number]; // [ymin, xmin, ymax, xmax]
+  confidence: number;
+}
+
+export function useGeminiLive(customInstruction?: string, onHazardsDetected?: (hazards: Hazard[]) => void) {
   const [status, setStatus] = useState<ConnectionState>('disconnected');
   const [transcript, setTranscript] = useState<{ role: 'user' | 'model', text: string }[]>([]);
   const [isInterrupted, setIsInterrupted] = useState(false);
@@ -19,7 +25,7 @@ export function useGeminiLive(customInstruction?: string) {
 
     try {
       const session = await ai.live.connect({
-        model: "gemini-2.5-flash-native-audio-preview-09-2025",
+        model: "gemini-2.5-flash-native-audio-preview-12-2025",
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
@@ -28,11 +34,20 @@ export function useGeminiLive(customInstruction?: string) {
           systemInstruction: customInstruction || `You are Guardian EMS AI, a high-performance tactical assistant for 911 EMTs and Paramedics. 
           Your primary directive is Responder Safety and Patient Care.
           
-          SCENE ANALYSIS & SAFETY:
+          SCENE ANALYSIS & HAZARD DETECTION (CRITICAL):
           - Continuously analyze the visual feed for hazards: traffic, downed power lines, fire, hazardous materials, or aggressive bystanders.
-          - If a hazard is detected, interrupt immediately with a clear "SAFETY ALERT" and specific instructions.
+          - When a hazard is detected, you MUST include a hidden tag in your text response in the EXACT format: [HAZARD: {"type": "fire", "box": [ymin, xmin, ymax, xmax], "confidence": 0.9}]
+          - The box coordinates MUST be normalized (0-1000): [ymin, xmin, ymax, xmax].
+          - If multiple hazards are detected, include multiple tags.
+          - Interrupt immediately with a clear verbal "SAFETY ALERT" and specific instructions if a hazard is detected.
           - Remind the responder of appropriate PPE (Gloves, Mask, Eye Pro) based on the scene context (e.g., blood, respiratory symptoms).
           
+          REAL-TIME TRANSLATION (CRITICAL):
+          - You are continuously listening to the audio feed.
+          - If you hear ANY patient or bystander speaking a language other than English, IMMEDIATELY translate what they are saying into English for the crew.
+          - Do not ask for permission to translate. Just provide the English translation concisely in real-time.
+          - If the crew speaks English to the patient, translate it into the patient's language to facilitate communication.
+
           PROTOCOL GUIDANCE:
           - Provide concise BLS/ALS protocol guidance.
           - Use medical terminology correctly.
@@ -55,6 +70,21 @@ export function useGeminiLive(customInstruction?: string) {
               }
               if (part?.text) {
                 setTranscript(prev => [...prev, { role: 'model', text: part.text! }]);
+                
+                // Parse hazards from text
+                const hazardMatches = part.text.matchAll(/\[HAZARD: (\{.*?\})\]/g);
+                const newHazards: Hazard[] = [];
+                for (const match of hazardMatches) {
+                  try {
+                    const hazard = JSON.parse(match[1]);
+                    newHazards.push(hazard);
+                  } catch (e) {
+                    console.error("Failed to parse hazard JSON", e);
+                  }
+                }
+                if (newHazards.length > 0) {
+                  onHazardsDetected?.(newHazards);
+                }
               }
             }
 
@@ -83,7 +113,7 @@ export function useGeminiLive(customInstruction?: string) {
       setStatus('error');
       console.error("Failed to connect:", err);
     }
-  }, [status]);
+  }, [status, customInstruction, onHazardsDetected]);
 
   const disconnect = useCallback(() => {
     if (sessionRef.current) {
@@ -96,7 +126,7 @@ export function useGeminiLive(customInstruction?: string) {
   const sendAudio = useCallback((base64Data: string) => {
     if (sessionRef.current && status === 'connected') {
       sessionRef.current.sendRealtimeInput({
-        media: { data: base64Data, mimeType: 'audio/pcm;rate=16000' }
+        audio: { data: base64Data, mimeType: 'audio/pcm;rate=16000' }
       });
     }
   }, [status]);
@@ -104,7 +134,7 @@ export function useGeminiLive(customInstruction?: string) {
   const sendVideoFrame = useCallback((base64Data: string) => {
     if (sessionRef.current && status === 'connected') {
       sessionRef.current.sendRealtimeInput({
-        media: { data: base64Data, mimeType: 'image/jpeg' }
+        video: { data: base64Data, mimeType: 'image/jpeg' }
       });
     }
   }, [status]);

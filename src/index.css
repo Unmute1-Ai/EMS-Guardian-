@@ -1,1 +1,65 @@
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-cad-bg: #000000;
+  --color-cad-surface: #0A0A0A;
+  --color-cad-border: #222222;
+  --color-cad-text: #FFFFFF;
+  --color-cad-muted: #666666;
+  
+  /* FDNY Status Colors */
+  --color-cad-green: #00FF00;  /* Available / In Service */
+  --color-cad-red: #FF0000;    /* En Route / Emergency */
+  --color-cad-amber: #FFFF00;  /* On Scene / Warning */
+  --color-cad-cyan: #00FFFF;   /* Hospital / Transport */
+  --color-cad-blue: #0000FF;   /* Police / Secondary */
+}
+
+@layer base {
+  body {
+    @apply bg-cad-bg text-cad-text font-sans antialiased;
+  }
+}
+
+@layer components {
+  .cad-panel {
+    @apply bg-cad-surface border border-cad-border rounded-none;
+  }
+  
+  .cad-header {
+    @apply bg-cad-border text-cad-text px-2 py-1 text-[10px] font-bold uppercase tracking-wider;
+  }
+
+  .cad-value {
+    @apply font-mono text-cad-green;
+  }
+
+  .cad-glow-green {
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.2);
+  }
+
+  .cad-glow-red {
+    box-shadow: 0 0 10px rgba(255, 0, 0, 0.2);
+  }
+
+  .cad-grid-bg {
+    background-image: radial-gradient(circle, #111 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 2px;
+  }
+}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Activity, 
@@ -18,7 +18,8 @@ import {
   Image as ImageIcon,
   Languages,
   Globe,
-  Navigation
+  Navigation,
+  Search
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { WebcamView } from './components/WebcamView';
@@ -26,7 +27,8 @@ import { ASLTranslator } from './components/ASLTranslator';
 import { LanguageTranslator } from './components/LanguageTranslator';
 import { MapView } from './components/MapView';
 import { SupportAssistant } from './components/SupportAssistant';
-import { useGeminiLive } from './hooks/useGeminiLive';
+import { TacticalLookup } from './components/TacticalLookup';
+import { useGeminiLive, Hazard } from './hooks/useGeminiLive';
 import { generateSimulatorScenario, generateImage, generateHandoffReport, getCrossStreets } from './services/geminiService';
 import { cn } from './lib/utils';
 
@@ -37,10 +39,32 @@ export default function App() {
   const [mode, setMode] = useState<AppMode>('FIELD');
   const [missionStatus, setMissionStatus] = useState<MissionStatus>('EN_ROUTE');
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [dutyStatus, setDutyStatus] = useState<'ACTIVE' | 'TRAINING'>('ACTIVE');
+  const [isARMode, setIsARMode] = useState(false);
+  const [hazards, setHazards] = useState<Hazard[]>([]);
   
+  const trainingInstruction = `You are a 911 Dispatcher and EMS Training Instructor. A training simulation is starting. 
+First, announce the simulated dispatch call verbally (e.g., "Unit 1, respond to a simulated cardiac arrest at 123 Main St"). 
+Then, guide the user through the scenario, asking them what they do next and providing verbal feedback on their actions. Make it realistic.
+
+SCENE ANALYSIS & HAZARD DETECTION (CRITICAL):
+- Continuously analyze the visual feed for hazards: traffic, downed power lines, fire, hazardous materials, or aggressive bystanders.
+- When a hazard is detected, you MUST include a hidden tag in your text response in the EXACT format: [HAZARD: {"type": "fire", "box": [ymin, xmin, ymax, xmax], "confidence": 0.9}]
+- The box coordinates MUST be normalized (0-1000): [ymin, xmin, ymax, xmax].
+- If multiple hazards are detected, include multiple tags.
+- Interrupt immediately with a clear verbal "SAFETY ALERT" and specific instructions if a hazard is detected.`;
+
+  const handleHazardsDetected = useCallback((detectedHazards: Hazard[]) => {
+    setHazards(detectedHazards);
+  }, []);
+
   // Field Assistant State
-  const { status, connect, disconnect, sendAudio, sendVideoFrame, transcript: fieldTranscript } = useGeminiLive();
+  const { status, connect, disconnect, sendAudio, sendVideoFrame, transcript: fieldTranscript } = useGeminiLive(
+    dutyStatus === 'TRAINING' ? trainingInstruction : undefined,
+    handleHazardsDetected
+  );
   const [isFieldActive, setIsFieldActive] = useState(false);
+  const [isLookupOpen, setIsLookupOpen] = useState(false);
   const [location, setLocation] = useState<{ lat: number; lng: number; crossStreets: string | null; accuracy: number | null }>({ lat: 0, lng: 0, crossStreets: null, accuracy: null });
 
   useEffect(() => {
@@ -83,6 +107,13 @@ export default function App() {
   const [reportLoading, setReportLoading] = useState(false);
 
   useEffect(() => {
+    if (hazards.length > 0) {
+      const timer = setTimeout(() => setHazards([]), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [hazards]);
+
+  useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
@@ -95,6 +126,40 @@ export default function App() {
       connect();
       setIsFieldActive(true);
     }
+  };
+
+  const playDispatchChime = () => {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(ctx.destination);
+    
+    osc1.type = 'square';
+    osc2.type = 'square';
+    
+    osc1.frequency.setValueAtTime(800, ctx.currentTime);
+    osc2.frequency.setValueAtTime(1000, ctx.currentTime);
+    
+    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.5);
+    
+    osc1.start(ctx.currentTime);
+    osc2.start(ctx.currentTime + 0.2);
+    
+    osc1.stop(ctx.currentTime + 1.5);
+    osc2.stop(ctx.currentTime + 1.5);
+  };
+
+  const triggerTrainingDispatch = () => {
+    playDispatchChime();
+    setTimeout(() => {
+      connect();
+      setIsFieldActive(true);
+    }, 1500);
   };
 
   const startNewSimulation = async () => {
@@ -173,236 +238,310 @@ export default function App() {
   }, [fieldTranscript]);
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-white font-sans flex flex-col">
-      {/* Top Navigation Rail */}
-      <nav className="h-14 border-b border-white/5 flex items-center justify-between px-6 bg-[#0D0D0D] shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-emerald-600 rounded flex items-center justify-center shadow-lg shadow-emerald-900/20">
-            <Shield className="w-5 h-5 text-white" />
+    <div className={cn(
+      "min-h-screen text-cad-text font-mono flex flex-col selection:bg-cad-green selection:text-black",
+      dutyStatus === 'TRAINING' ? "bg-cad-bg/90" : "bg-cad-bg",
+      isARMode ? "bg-black" : ""
+    )}>
+      {/* FDNY CAD Top Status Bar */}
+      {!isARMode && (
+        <nav className={cn(
+          "h-10 border-b flex items-center justify-between px-4 shrink-0 transition-colors",
+          dutyStatus === 'TRAINING' ? "bg-cad-amber/10 border-cad-amber/30" : "bg-cad-surface border-cad-border"
+        )}>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Shield className={cn("w-4 h-4", dutyStatus === 'TRAINING' ? "text-cad-amber" : "text-cad-red")} />
+              <span className="text-xs font-bold tracking-tighter uppercase">
+                {dutyStatus === 'TRAINING' ? 'TRAINING SIM // UNIT 01-A' : 'FDNY CAD // UNIT 01-A'}
+              </span>
+            </div>
+            <div className={cn("h-4 w-[1px]", dutyStatus === 'TRAINING' ? "bg-cad-amber/30" : "bg-cad-border")} />
+            <div className="flex items-center gap-3">
+              {[
+                { id: 'FIELD', label: '10-8' }, // In Service
+                { id: 'TRAINING', label: 'SIM' },
+                { id: 'REPORT', label: 'RPT' },
+                { id: 'TRANSLATOR', label: 'TRN' },
+                { id: 'ASL', label: 'ASL' },
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setMode(item.id as AppMode)}
+                  className={cn(
+                    "px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest transition-all border",
+                    mode === item.id 
+                      ? (dutyStatus === 'TRAINING' ? "bg-cad-amber text-black border-cad-amber" : "bg-cad-green text-black border-cad-green")
+                      : "text-cad-muted border-transparent hover:text-white hover:border-cad-border"
+                  )}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
           </div>
-          <div>
-            <h1 className="text-sm font-bold tracking-tight uppercase">Guardian EMS</h1>
-            <p className="text-[10px] text-white/40 font-mono leading-none">Tactical Medical Suite v3.0</p>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg border border-white/10">
-          {[
-            { id: 'FIELD', icon: Stethoscope, label: 'Field' },
-            { id: 'TRANSLATOR', icon: Globe, label: 'Translate' },
-            { id: 'TRAINING', icon: BookOpen, label: 'Training' },
-            { id: 'REPORT', icon: FileText, label: 'Report' },
-            { id: 'ASL', icon: Languages, label: 'ASL' },
-          ].map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setMode(item.id as AppMode)}
-              className={cn(
-                "flex items-center gap-2 px-4 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all",
-                mode === item.id ? "bg-emerald-600 text-white shadow-lg" : "text-white/40 hover:text-white hover:bg-white/5"
-              )}
-            >
-              <item.icon className="w-3 h-3" />
-              {item.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-6">
-          <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-white/10">
-            <Clock className="w-3 h-3 text-emerald-500" />
-            <span className="text-xs font-mono">{currentTime.toLocaleTimeString()}</span>
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setDutyStatus(prev => prev === 'ACTIVE' ? 'TRAINING' : 'ACTIVE')}
+                className={cn(
+                  "px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest border transition-colors",
+                  dutyStatus === 'TRAINING' ? "bg-cad-amber text-black border-cad-amber" : "bg-black/40 text-cad-muted border-cad-border hover:text-white"
+                )}
+              >
+                {dutyStatus === 'TRAINING' ? 'TRAINING MODE' : 'ACTIVE DUTY'}
+              </button>
+              <button
+                onClick={() => setIsARMode(true)}
+                className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest border bg-black/40 text-cad-cyan border-cad-cyan/50 hover:bg-cad-cyan hover:text-black transition-colors"
+              >
+                AR HUD
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Clock className={cn("w-3 h-3", dutyStatus === 'TRAINING' ? "text-cad-amber" : "text-cad-green")} />
+              <span className="text-[10px] font-mono">{currentTime.toLocaleTimeString()}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className={cn(
+                "w-2 h-2 rounded-none",
+                status === 'connected' ? (dutyStatus === 'TRAINING' ? "bg-cad-amber" : "bg-cad-green") : "bg-cad-red"
+              )} />
+              <span className="text-[10px] uppercase tracking-widest text-cad-muted">
+                {status === 'connected' ? 'ONLINE' : 'OFFLINE'}
+              </span>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className={cn(
-              "w-2 h-2 rounded-full",
-              status === 'connected' ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-red-500"
-            )} />
-            <span className="text-[10px] font-mono uppercase tracking-widest text-white/60">
-              {status === 'connected' ? 'Live' : 'Offline'}
-            </span>
-          </div>
-        </div>
-      </nav>
+        </nav>
+      )}
 
-      <main className="flex-1 p-6 overflow-hidden flex flex-col">
+      <main className="flex-1 p-2 overflow-hidden flex flex-col gap-2">
         <AnimatePresence mode="wait">
           {mode === 'FIELD' && (
             <motion.div 
               key="field"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              className="flex-1 flex flex-col max-w-[1600px] mx-auto w-full"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex-1 flex flex-col w-full gap-2"
             >
               <AnimatePresence mode="wait">
                 {missionStatus === 'EN_ROUTE' ? (
                   <motion.div
                     key="map"
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 1.05 }}
-                    className="flex-1 min-h-0"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="flex-1 min-h-0 border border-cad-border"
                   >
                     <MapView 
                       location={location} 
                       onArrive={() => {
                         setMissionStatus('ON_SCENE');
-                        handleToggleField(); // Auto-initialize AI on arrival
+                        if (status !== 'connected') {
+                          connect();
+                          setIsFieldActive(true);
+                        }
                       }} 
                     />
                   </motion.div>
                 ) : (
                   <motion.div
                     key="on-scene"
-                    initial={{ opacity: 0, scale: 1.05 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    className="grid grid-cols-12 gap-6 flex-1 min-h-0"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className={cn(
+                      "gap-2 flex-1 min-h-0",
+                      isARMode ? "flex flex-col fixed inset-0 z-50 bg-black" : "grid grid-cols-12"
+                    )}
                   >
-                    {/* Left Column: Visual Feed */}
-                    <div className="col-span-12 lg:col-span-7 space-y-6 flex flex-col">
-                      <div className="relative group flex-1 min-h-[400px]">
+                    {/* Left Column: Visual Feed & Vitals */}
+                    <div className={cn(
+                      "flex flex-col gap-2",
+                      isARMode ? "flex-1 h-full relative" : "col-span-12 lg:col-span-8"
+                    )}>
+                      <div className={cn(
+                        "relative flex-1 border bg-black",
+                        isARMode ? "border-transparent" : "min-h-[400px] border-cad-border"
+                      )}>
+                        <div className="absolute top-0 left-0 right-0 z-10 bg-cad-border/80 px-2 py-1 flex justify-between items-center">
+                          <span className="text-[10px] font-bold text-white uppercase">Visual Feed // Scene Analysis</span>
+                          <div className="flex gap-2">
+                            <div className={cn("w-2 h-2", isFieldActive ? "bg-cad-green" : "bg-cad-muted")} />
+                            <span className="text-[8px] text-white/60">AI: {isFieldActive ? 'ACTIVE' : 'STANDBY'}</span>
+                          </div>
+                        </div>
+
                         <WebcamView 
                           active={isFieldActive} 
                           onAudio={sendAudio} 
                           onFrame={sendVideoFrame}
                           location={location}
+                          hazards={hazards}
                           className={cn(
-                            "w-full h-full transition-all duration-500",
-                            hasSafetyAlert ? "ring-4 ring-red-500 ring-offset-4 ring-offset-black" : ""
+                            "w-full h-full object-cover contrast-125",
+                            !isARMode && "grayscale",
+                            hasSafetyAlert ? "ring-4 ring-cad-red ring-inset" : ""
                           )}
                         />
                         
                         <AnimatePresence>
                           {hasSafetyAlert && (
                             <motion.div
-                              initial={{ opacity: 0, y: -20 }}
+                              initial={{ opacity: 0, y: -10 }}
                               animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -20 }}
-                              className="absolute top-6 left-1/2 -translate-x-1/2 z-20 w-[90%]"
+                              exit={{ opacity: 0, y: -10 }}
+                              className="absolute top-10 left-2 right-2 z-20"
                             >
-                              <div className="bg-red-600 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-4 animate-pulse border-2 border-white/20">
-                                <AlertCircle className="w-6 h-6 shrink-0" />
+                              <div className="bg-cad-red text-white px-4 py-2 flex items-center gap-4 border border-white/20">
+                                <AlertCircle className="w-5 h-5 shrink-0" />
                                 <div>
-                                  <p className="text-xs font-black uppercase tracking-[0.2em]">Safety Alert Detected</p>
-                                  <p className="text-[10px] font-mono opacity-80 uppercase">AI Scene Analysis: Immediate Hazard Identified</p>
+                                  <p className="text-[10px] font-black uppercase tracking-widest">10-33: EMERGENCY TRAFFIC</p>
+                                  <p className="text-[8px] opacity-80 uppercase">AI DETECTED IMMEDIATE HAZARD</p>
                                 </div>
                               </div>
                             </motion.div>
                           )}
                         </AnimatePresence>
 
-                        <div className="absolute top-6 left-6 flex flex-col gap-2">
-                          <div className="flex items-center gap-2 px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-lg border border-white/10">
-                            <div className={cn("w-2 h-2 rounded-full", isFieldActive ? "bg-emerald-500 animate-pulse" : "bg-white/20")} />
-                            <span className="text-[10px] font-mono uppercase tracking-widest">Vision: {isFieldActive ? 'Active' : 'Standby'}</span>
-                          </div>
-                          {isFieldActive && (
-                            <motion.div 
-                              initial={{ opacity: 0, x: -10 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/20 backdrop-blur-md rounded-lg border border-emerald-500/30"
+                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 z-30">
+                          {isARMode && (
+                            <button
+                              onClick={() => setIsARMode(false)}
+                              className="px-4 py-2 font-bold text-xs uppercase tracking-[0.2em] transition-all border bg-black/60 text-cad-cyan border-cad-cyan hover:bg-cad-cyan hover:text-black backdrop-blur-md"
                             >
-                              <Scan className="w-3 h-3 text-emerald-500" />
-                              <span className="text-[10px] font-mono uppercase tracking-widest text-emerald-500">Scene Analysis Running</span>
-                            </motion.div>
+                              EXIT AR HUD
+                            </button>
                           )}
-                        </div>
-                        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4">
+                          
+                          {dutyStatus === 'TRAINING' && (
+                            <button
+                              onClick={triggerTrainingDispatch}
+                              className="px-4 py-2 font-bold text-xs uppercase tracking-[0.2em] transition-all border bg-cad-amber text-black border-cad-amber hover:bg-white shadow-[0_0_15px_rgba(245,158,11,0.5)]"
+                            >
+                              SIM DISPATCH
+                            </button>
+                          )}
+
                           <button
                             onClick={handleToggleField}
                             className={cn(
-                              "flex items-center gap-3 px-8 py-4 rounded-full font-bold transition-all active:scale-95 shadow-2xl",
+                              "px-6 py-2 font-bold text-xs uppercase tracking-[0.2em] transition-all border",
                               status === 'connected' 
-                                ? "bg-red-500/10 border border-red-500/50 text-red-500 hover:bg-red-500 hover:text-white" 
-                                : "bg-emerald-500 text-black hover:bg-emerald-400"
+                                ? "bg-cad-red/20 border-cad-red text-cad-red hover:bg-cad-red hover:text-white" 
+                                : (dutyStatus === 'TRAINING' ? "bg-cad-amber text-black border-cad-amber hover:bg-white" : "bg-cad-green text-black border-cad-green hover:bg-white")
                             )}
                           >
-                            {status === 'connected' ? (
-                              <>
-                                <MicOff className="w-5 h-5" />
-                                <span>END MISSION</span>
-                              </>
-                            ) : (
-                              <>
-                                <Mic className="w-5 h-5" />
-                                <span>INITIALIZE UNIT</span>
-                              </>
-                            )}
+                            {status === 'connected' ? '10-7 (OUT)' : '10-8 (IN)'}
                           </button>
                           
                           <button 
                             onClick={() => setMissionStatus('EN_ROUTE')}
-                            className="p-4 bg-white/5 border border-white/10 rounded-full text-white/40 hover:text-white hover:bg-white/10 transition-all"
-                            title="Return to Navigation"
+                            className="p-2 bg-cad-surface border border-cad-border text-cad-muted hover:text-white hover:bg-cad-border transition-all"
                           >
-                            <Navigation className="w-5 h-5" />
+                            <Navigation className="w-4 h-4" />
                           </button>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-4">
+                      {/* Vitals Grid - CAD Style */}
+                      <div className={cn(
+                        "grid grid-cols-3 gap-2",
+                        isARMode ? "absolute top-10 right-2 w-48 grid-cols-1 z-20" : ""
+                      )}>
                         {[
-                          { label: 'HEART RATE', value: '72', unit: 'BPM', icon: HeartPulse, color: 'text-rose-500' },
-                          { label: 'SPO2', value: '98', unit: '%', icon: Activity, color: 'text-emerald-500' },
-                          { label: 'RESPIRATION', value: '16', unit: '/MIN', icon: Scan, color: 'text-blue-500' },
+                          { label: 'HR', value: '72', unit: 'BPM', color: 'text-cad-green' },
+                          { label: 'SPO2', value: '98', unit: '%', color: 'text-cad-cyan' },
+                          { label: 'RESP', value: '16', unit: '/M', color: 'text-cad-amber' },
                         ].map((stat) => (
-                          <div key={stat.label} className="bg-[#111] border border-white/5 p-4 rounded-xl">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-[10px] font-mono text-white/40 tracking-wider uppercase">{stat.label}</span>
-                              <stat.icon className={cn("w-4 h-4", stat.color)} />
-                            </div>
-                            <div className="flex items-baseline gap-1">
-                              <span className="text-2xl font-bold font-mono">{stat.value}</span>
-                              <span className="text-[10px] text-white/30 font-mono">{stat.unit}</span>
+                          <div key={stat.label} className={cn(
+                            "border p-2",
+                            isARMode ? "bg-black/60 border-cad-border/50 backdrop-blur-sm" : "bg-cad-surface border-cad-border"
+                          )}>
+                            <div className="text-[8px] text-cad-muted uppercase mb-1">{stat.label}</div>
+                            <div className="flex items-baseline gap-2">
+                              <span className={cn("text-2xl font-bold", stat.color)}>{stat.value}</span>
+                              <span className="text-[8px] text-cad-muted">{stat.unit}</span>
                             </div>
                           </div>
                         ))}
                       </div>
                     </div>
 
-                    {/* Right Column: Comms */}
-                    <div className="col-span-12 lg:col-span-5 flex flex-col h-full">
-                      <div className="flex-1 bg-[#111] border border-white/5 rounded-2xl flex flex-col overflow-hidden">
-                        <div className="p-4 border-b border-white/5 flex items-center justify-between bg-white/2">
+                    {/* Right Column: Comms & Lookup */}
+                    {!isARMode && (
+                      <div className="col-span-12 lg:col-span-4 flex flex-col gap-2">
+                        <div className="flex-1 bg-cad-surface border border-cad-border flex flex-col overflow-hidden relative">
+                        <div className="bg-cad-border px-2 py-1 flex justify-between items-center">
                           <div className="flex items-center gap-2">
-                            <AlertCircle className="w-4 h-4 text-amber-500" />
-                            <span className="text-xs font-bold uppercase tracking-widest">Protocol Intelligence</span>
+                            <span className="text-[10px] font-bold text-white uppercase tracking-widest">CAD COMMS // PROTOCOL</span>
+                            {isFieldActive && (
+                              <div className="flex items-center gap-1 px-1.5 py-0.5 bg-cad-green/20 border border-cad-green/30">
+                                <Languages className="w-3 h-3 text-cad-green" />
+                                <span className="text-[8px] text-cad-green font-bold uppercase tracking-widest animate-pulse">AUTO-TRANSLATE: ON</span>
+                              </div>
+                            )}
                           </div>
+                          <button 
+                            onClick={() => setIsLookupOpen(!isLookupOpen)}
+                            className={cn(
+                              "px-2 py-0.5 text-[8px] font-bold uppercase tracking-widest transition-all border",
+                              isLookupOpen ? "bg-cad-amber text-black border-cad-amber" : "bg-black/20 text-cad-muted border-cad-border hover:text-white"
+                            )}
+                          >
+                            LOOKUP
+                          </button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+                        <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar font-mono text-[11px]">
                           {fieldTranscript.length === 0 ? (
-                            <div className="h-full flex flex-col items-center justify-center text-center p-8 opacity-20">
-                              <Activity className="w-12 h-12 mb-4" />
-                              <p className="text-sm font-mono">Awaiting field input...</p>
+                            <div className="h-full flex flex-col items-center justify-center opacity-10">
+                              <Activity className="w-8 h-8 mb-2" />
+                              <p className="text-[10px] uppercase">Awaiting Data...</p>
                             </div>
                           ) : (
                             fieldTranscript.map((entry, i) => (
                               <motion.div
                                 key={i}
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
                                 className={cn(
-                                  "p-4 rounded-xl text-sm leading-relaxed",
+                                  "p-2 border-l-2",
                                   entry.role === 'user' 
-                                    ? "bg-white/5 ml-8 border-l-2 border-white/20" 
-                                    : "bg-emerald-500/10 mr-8 border-l-2 border-emerald-500"
+                                    ? "bg-white/5 border-cad-muted ml-4" 
+                                    : "bg-cad-green/5 border-cad-green mr-4"
                                 )}
                               >
-                                <span className="text-[10px] font-bold uppercase text-white/40 block mb-1">
-                                  {entry.role === 'user' ? 'Responder' : 'Guardian AI'}
+                                <span className={cn(
+                                  "text-[8px] font-bold uppercase block mb-1",
+                                  entry.role === 'user' ? "text-cad-muted" : "text-cad-green"
+                                )}>
+                                  {entry.role === 'user' ? 'UNIT-01A' : 'DISPATCH-AI'}
                                 </span>
-                                <p className={entry.role === 'model' ? "text-emerald-50" : "text-white/80"}>
+                                <p className={entry.role === 'model' ? "text-cad-green" : "text-white/80"}>
                                   {entry.text}
                                 </p>
                               </motion.div>
                             ))
                           )}
                         </div>
+
+                        <AnimatePresence>
+                          {isLookupOpen && (
+                            <motion.div
+                              initial={{ x: '100%' }}
+                              animate={{ x: 0 }}
+                              exit={{ x: '100%' }}
+                              transition={{ type: 'tween', duration: 0.2 }}
+                              className="absolute inset-0 z-30"
+                            >
+                              <TacticalLookup onClose={() => setIsLookupOpen(false)} />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     </div>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -439,28 +578,28 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.98 }}
-              className="max-w-4xl mx-auto h-full flex flex-col gap-6"
+              className="max-w-5xl mx-auto h-full flex flex-col gap-4 w-full"
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between bg-cad-surface border border-cad-border p-3">
                 <div>
-                  <h2 className="text-xl font-bold">EMS Training Simulator</h2>
-                  <p className="text-sm text-white/40">Interactive scenarios with multimodal feedback.</p>
+                  <h2 className="text-sm font-bold uppercase tracking-widest">EMS TRAINING SIMULATOR</h2>
+                  <p className="text-[10px] text-cad-muted uppercase">INTERACTIVE SCENARIOS // MULTIMODAL FEEDBACK</p>
                 </div>
                 <button 
                   onClick={startNewSimulation}
                   disabled={simLoading}
-                  className="px-6 py-2 bg-emerald-600 rounded-lg font-bold text-xs uppercase tracking-widest hover:bg-emerald-500 disabled:opacity-50"
+                  className="px-4 py-2 bg-cad-green text-black font-bold text-[10px] uppercase tracking-widest hover:bg-white disabled:opacity-50 border border-cad-green"
                 >
-                  New Scenario
+                  NEW SCENARIO
                 </button>
               </div>
 
-              <div className="flex-1 bg-[#111] border border-white/5 rounded-2xl overflow-hidden flex flex-col">
-                <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+              <div className="flex-1 bg-cad-surface border border-cad-border overflow-hidden flex flex-col">
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
                   {simHistory.length === 0 && !simLoading && (
-                    <div className="h-full flex flex-col items-center justify-center text-center opacity-30">
-                      <BookOpen className="w-16 h-16 mb-4" />
-                      <p>Initialize a new scenario to begin training.</p>
+                    <div className="h-full flex flex-col items-center justify-center text-center opacity-10">
+                      <BookOpen className="w-12 h-12 mb-4" />
+                      <p className="text-[10px] uppercase tracking-widest">INITIALIZE A NEW SCENARIO TO BEGIN TRAINING.</p>
                     </div>
                   )}
 
@@ -468,54 +607,57 @@ export default function App() {
                     <motion.div 
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="relative aspect-video rounded-xl overflow-hidden border border-white/10"
+                      className="relative aspect-video overflow-hidden border border-cad-border bg-black"
                     >
-                      <img src={currentSimImage} alt="Scenario Visual" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                      <div className="absolute bottom-4 left-4 flex items-center gap-2">
-                        <ImageIcon className="w-4 h-4 text-emerald-500" />
-                        <span className="text-[10px] font-mono uppercase tracking-widest">AI Generated Scene</span>
+                      <img src={currentSimImage} alt="Scenario Visual" className="w-full h-full object-cover grayscale contrast-125" referrerPolicy="no-referrer" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
+                      <div className="absolute bottom-3 left-3 flex items-center gap-2">
+                        <ImageIcon className="w-3 h-3 text-cad-green" />
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-cad-green">AI GENERATED SCENE</span>
                       </div>
                     </motion.div>
                   )}
 
                   {simHistory.map((item, i) => (
                     <div key={i} className={cn(
-                      "p-4 rounded-xl",
-                      item.role === 'user' ? "bg-white/5 border-l-2 border-white/20" : "bg-emerald-500/5 border-l-2 border-emerald-500"
+                      "p-3 border",
+                      item.role === 'user' ? "bg-black/40 border-cad-border ml-8" : "bg-cad-green/5 border-cad-green/30 mr-8"
                     )}>
-                      <span className="text-[10px] font-bold uppercase text-white/40 block mb-2">
-                        {item.role === 'user' ? 'Your Action' : 'Simulator'}
+                      <span className={cn(
+                        "text-[9px] font-bold uppercase block mb-2",
+                        item.role === 'user' ? "text-cad-muted" : "text-cad-green"
+                      )}>
+                        {item.role === 'user' ? 'RESPONDER ACTION' : 'SIMULATOR FEEDBACK'}
                       </span>
-                      <div className="prose prose-invert prose-sm max-w-none">
+                      <div className="prose prose-invert prose-xs max-w-none uppercase text-[11px] leading-relaxed">
                         <Markdown>{item.parts[0].text}</Markdown>
                       </div>
                     </div>
                   ))}
 
                   {simLoading && (
-                    <div className="flex items-center gap-3 text-emerald-500 font-mono text-xs animate-pulse">
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                    <div className="flex items-center gap-3 text-cad-green font-bold text-[10px] animate-pulse uppercase tracking-widest">
+                      <Loader2 className="w-3 h-3 animate-spin" />
                       GENERATING SCENARIO DATA...
                     </div>
                   )}
                 </div>
 
-                <div className="p-4 bg-black/40 border-t border-white/5 flex gap-4">
+                <div className="p-3 bg-black/40 border-t border-cad-border flex gap-3">
                   <input 
                     type="text"
                     value={simInput}
                     onChange={(e) => setSimInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSimAction()}
-                    placeholder="Describe your next action (e.g., 'Check pulse and start compressions')"
-                    className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-500/50"
+                    placeholder="DESCRIBE YOUR NEXT ACTION (E.G., 'CHECK PULSE AND START COMPRESSIONS')"
+                    className="flex-1 bg-black/60 border border-cad-border px-4 py-2 text-[11px] uppercase focus:outline-none focus:border-cad-green/50 text-white placeholder:text-cad-muted"
                   />
                   <button 
                     onClick={handleSimAction}
                     disabled={simLoading || !simInput.trim()}
-                    className="w-12 h-12 bg-emerald-600 rounded-xl flex items-center justify-center hover:bg-emerald-500 disabled:opacity-50"
+                    className="w-10 h-10 bg-cad-green text-black flex items-center justify-center hover:bg-white disabled:opacity-50 border border-cad-green"
                   >
-                    <Send className="w-5 h-5" />
+                    <Send className="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -528,43 +670,43 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="max-w-3xl mx-auto h-full flex flex-col gap-6"
+              className="max-w-5xl mx-auto h-full flex flex-col gap-4 w-full"
             >
-              <div>
-                <h2 className="text-xl font-bold">Handoff Report Generator</h2>
-                <p className="text-sm text-white/40">Compile field notes into professional documentation.</p>
+              <div className="bg-cad-surface border border-cad-border p-3">
+                <h2 className="text-sm font-bold uppercase tracking-widest">HANDOFF REPORT GENERATOR</h2>
+                <p className="text-[10px] text-cad-muted uppercase">COMPILE FIELD NOTES INTO PROFESSIONAL DOCUMENTATION</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 overflow-hidden">
-                <div className="flex flex-col gap-4">
-                  <label className="text-[10px] font-bold uppercase text-white/40">Field Notes</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 overflow-hidden">
+                <div className="flex flex-col gap-2">
+                  <label className="text-[9px] font-bold uppercase text-cad-muted px-1">FIELD NOTES // INPUT</label>
                   <textarea 
                     value={reportInput}
                     onChange={(e) => setReportInput(e.target.value)}
-                    placeholder="Enter patient history, vitals, and interventions..."
-                    className="flex-1 bg-[#111] border border-white/5 rounded-2xl p-6 text-sm resize-none focus:outline-none focus:border-emerald-500/50 custom-scrollbar"
+                    placeholder="ENTER PATIENT HISTORY, VITALS, AND INTERVENTIONS..."
+                    className="flex-1 bg-cad-surface border border-cad-border p-4 text-[11px] uppercase resize-none focus:outline-none focus:border-cad-green/50 custom-scrollbar text-white placeholder:text-cad-muted"
                   />
                   <button 
                     onClick={handleGenerateReport}
                     disabled={reportLoading || !reportInput.trim()}
-                    className="py-4 bg-emerald-600 rounded-xl font-bold uppercase tracking-widest hover:bg-emerald-500 disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="py-3 bg-cad-green text-black font-bold uppercase tracking-widest hover:bg-white disabled:opacity-50 flex items-center justify-center gap-2 text-[10px] border border-cad-green"
                   >
-                    {reportLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileText className="w-5 h-5" />}
-                    Generate Report
+                    {reportLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                    GENERATE REPORT
                   </button>
                 </div>
 
-                <div className="flex flex-col gap-4">
-                  <label className="text-[10px] font-bold uppercase text-white/40">Structured Report</label>
-                  <div className="flex-1 bg-[#111] border border-white/5 rounded-2xl p-6 overflow-y-auto custom-scrollbar relative">
+                <div className="flex flex-col gap-2">
+                  <label className="text-[9px] font-bold uppercase text-cad-muted px-1">STRUCTURED REPORT // OUTPUT</label>
+                  <div className="flex-1 bg-cad-surface border border-cad-border p-4 overflow-y-auto custom-scrollbar relative">
                     {generatedReport ? (
-                      <div className="prose prose-invert prose-sm max-w-none">
+                      <div className="prose prose-invert prose-xs max-w-none uppercase text-[11px] leading-relaxed">
                         <Markdown>{generatedReport}</Markdown>
                       </div>
                     ) : (
-                      <div className="h-full flex flex-col items-center justify-center text-center opacity-20">
-                        <FileText className="w-12 h-12 mb-4" />
-                        <p className="text-xs">Report will appear here.</p>
+                      <div className="h-full flex flex-col items-center justify-center text-center opacity-10">
+                        <FileText className="w-10 h-10 mb-4" />
+                        <p className="text-[10px] uppercase tracking-widest">REPORT WILL APPEAR HERE.</p>
                       </div>
                     )}
                   </div>
