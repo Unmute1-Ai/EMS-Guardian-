@@ -1,0 +1,5 @@
+🔐 EMS Guardian Production Verification
+======================================
+
+Checking environment...
+[0;32m✓[0m Node.js v24.14.0 installed

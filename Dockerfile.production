@@ -1,0 +1,72 @@
+# Use multi-stage build for optimal image size
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apk add --no-cache python3 make g++
+
+# Copy package files
+COPY package*.json ./
+COPY tsconfig.json ./
+COPY vite.config.ts ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy source code
+COPY src ./src
+COPY public ./public
+
+# Build application
+RUN npm run build
+
+# Production stage
+FROM node:18-alpine
+
+# Install security packages
+RUN apk add --no-cache tini curl
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S ems-guardian -u 1001
+
+WORKDIR /app
+
+# Copy built application from builder
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY package*.json ./
+
+# Copy certificates if available
+COPY --chown=ems-guardian:nodejs certs/ ./certs/ 2>/dev/null || 
+
+
+
+
+
+
+# Set security permissions
+RUN chown -R ems-guardian:nodejs /app && \
+    chmod -R 755 /app/dist && \
+    chmod 500 /app
+
+# Switch to non-root user
+USER ems-guardian
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:3000/health || exit 1
+
+# Use tini as init process (prevents zombie processes)
+ENTRYPOINT ["/sbin/tini", "--"]
+
+# Start application
+CMD ["node", "--max-old-space-size=512", "dist/main.js"]
+
+# Metadata labels
+LABEL org.opencontainers.image.title="EMS Guardian"
+LABEL org.opencontainers.image.description="HIPAA & Mayo Clinic Standards Compliant EMS Tactical Medical Suite"
+LABEL org.opencontainers.image.version="1.0.0"
+LABEL org.opencontainers.image.vendor="EMS Guardian"
+LABEL org.opencontainers.image.documentation="https://github.com/your-org/ems-guardian/blob/main/DEPLOYMENT_GUIDE.md"

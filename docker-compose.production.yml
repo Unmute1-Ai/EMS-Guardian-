@@ -1,0 +1,132 @@
+version: '3.8'
+
+services:
+  ems-guardian:
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+    container_name: ems-guardian-prod
+    
+    # Port configuration
+    ports:
+      - "443:3000"  # HTTPS (reverse proxy should handle TLS)
+    
+    # Environment variables
+    environment:
+      - NODE_ENV=production
+      - ENVIRONMENT=production
+      - LOG_LEVEL=info
+      - HIPAA_MODE=true
+      - AUDIT_LOGGING=true
+      - MFA_REQUIRED=true
+      - MAYO_PROTOCOLS=true
+      - CLINICAL_VALIDATION=true
+      - ERROR_TRACKING=true
+      - PERF_MONITORING=true
+      # Load from .env file (DO NOT commit with real values)
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - TOKEN_SECRET=${TOKEN_SECRET}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    
+    # Volume mounts for persistent data
+    volumes:
+      # Logs
+      - ./logs:/app/logs:rw
+      # Configuration (read-only)
+      - ./certs:/app/certs:ro
+      # Temporary files
+      - /tmp/ems-guardian:/app/tmp:rw
+    
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    
+    # Restart policy
+    restart: on-failure:5
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+        labels: "app=ems-guardian"
+    
+    # Network
+    networks:
+      - ems-network
+    
+    # Additional configuration
+    command: node --max-old-space-size=512 dist/main.js
+    stdin_open: true
+    tty: false
+
+  # Optional: Reverse proxy with TLS termination
+  nginx-proxy:
+    image: nginx:latest
+    container_name: ems-guardian-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+      - ./logs/nginx:/var/log/nginx:rw
+    networks:
+      - ems-network
+    depends_on:
+      - ems-guardian
+    restart: on-failure:5
+
+  # Optional: Audit log persistence
+  log-collector:
+    image: elasticsearch:8.0.0
+    container_name: ems-guardian-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - ems-network
+    ports:
+      - "9200:9200"
+    restart: on-failure:5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+networks:
+  ems-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  elasticsearch_data:
+    driver: local
