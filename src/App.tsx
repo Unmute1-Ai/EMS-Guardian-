@@ -128,9 +128,11 @@ SCENE ANALYSIS & HAZARD DETECTION (CRITICAL):
     if (status === 'connected') {
       disconnect();
       setIsFieldActive(false);
+      announce.statusOutOfService(agency).catch(() => {});
     } else {
       connect();
       setIsFieldActive(true);
+      announce.statusInService(agency).catch(() => {});
     }
   };
 
@@ -235,11 +237,14 @@ SCENE ANALYSIS & HAZARD DETECTION (CRITICAL):
       const lastMessage = fieldTranscript[fieldTranscript.length - 1];
       if (lastMessage.role === 'model' && lastMessage.text.toUpperCase().includes('SAFETY ALERT')) {
         setHasSafetyAlert(true);
+        // Speak the safety alert with the current agency voice
+        const alertText = lastMessage.text.replace(/\[HAZARD:.*?\]/gi, '').trim().slice(0, 200);
+        announce.safetyAlert(alertText || 'Immediate hazard detected.', agency).catch(() => {});
         const timer = setTimeout(() => setHasSafetyAlert(false), 10000);
         return () => clearTimeout(timer);
       }
     }
-  }, [fieldTranscript]);
+  }, [fieldTranscript, agency]);
 
   return (
     <div className={cn(
