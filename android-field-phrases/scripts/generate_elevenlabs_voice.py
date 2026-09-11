@@ -6,7 +6,7 @@ phrase_file = root / "app/src/main/assets/phrases.json"
 data = json.loads(phrase_file.read_text(encoding="utf-8"))
 
 api_key = os.environ.get("ELEVENLABS_API_KEY", "").strip()
-voice_id = os.environ.get("ELEVENLABS_VOICE_ID", "JBFqnCBsd6RMkjVDRZzb").strip()
+voice_id = (os.environ.get("ELEVENLABS_VOICE_ID") or "JBFqnCBsd6RMkjVDRZzb").strip()
 if not api_key:
     raise SystemExit("ELEVENLABS_API_KEY is required for the voice-enabled build")
 
