@@ -1,0 +1,59 @@
+name: Build and publish U1 Field APK
+on:
+  push:
+    branches: ["u1-field-v0.1"]
+    paths: ["android-field/**", ".github/workflows/build-u1-field.yml"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: android-field
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - name: Install Android toolchain
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: Bundle pinned multilingual model
+        run: |
+          mkdir -p app/src/main/assets/models
+          curl -L --fail --retry 3 -o app/src/main/assets/models/ggml-base.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
+          test "$(sha1sum app/src/main/assets/models/ggml-base.bin | awk '{print $1}')" = "465707469ff3a37a2b9b8d8f89f2f99de7299dac"
+      - name: Compile release APK
+        run: gradle --no-daemon :app:assembleRelease
+      - name: Enforce offline permission boundary
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" | tee /tmp/permissions.txt
+          grep -q "android.permission.RECORD_AUDIO" /tmp/permissions.txt
+          if grep -q "android.permission.INTERNET" /tmp/permissions.txt; then echo "INTERNET permission found"; exit 1; fi
+      - name: Name field artifact
+        run: cp app/build/outputs/apk/release/app-release.apk ../U1-Field-v0.1-android-arm64.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: U1-Field-v0.1-APK
+          path: U1-Field-v0.1-android-arm64.apk
+          if-no-files-found: error
+      - name: Publish sideload release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd ..
+          if gh release view u1-field-v0.1 >/dev/null 2>&1; then
+            gh release upload u1-field-v0.1 U1-Field-v0.1-android-arm64.apk --clobber
+          else
+            gh release create u1-field-v0.1 U1-Field-v0.1-android-arm64.apk --target "$GITHUB_SHA" --title "U1 Field v0.1 — Offline EMS Translation" --notes "Android arm64 field pilot. Patient-language speech to English for NYC Local Law 30 languages. On-device inference; no INTERNET permission; no conversation retention. Communication aid only; validate critical information directly."
+          fi
