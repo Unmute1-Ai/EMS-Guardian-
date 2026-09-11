@@ -1,7 +1,7 @@
 name: Build and publish U1 Field APK
 on:
   push:
-    branches: ["u1-field-v0.1"]
+    branches: ["u1-field-v0.1-build"]
     paths: ["android-field/**", ".github/workflows/build-u1-field.yml"]
   workflow_dispatch:
 permissions:
