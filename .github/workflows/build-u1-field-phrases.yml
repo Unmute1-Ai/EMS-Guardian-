@@ -1,0 +1,79 @@
+name: Build U1 Field Phraseboard APK
+
+on:
+  push:
+    branches: ["mobile-demo-v01"]
+    paths:
+      - "android-field-phrases/**"
+      - ".github/workflows/build-u1-field-phrases.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: android-field-phrases
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android toolchain
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Generate bundled ElevenLabs voice pack
+        env:
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+        run: python3 scripts/generate_elevenlabs_voice.py
+
+      - name: Compile release APK
+        run: gradle --no-daemon :app:assembleRelease
+
+      - name: Verify privacy boundary and voice pack
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" | tee /tmp/permissions.txt
+          if grep -q "uses-permission" /tmp/permissions.txt; then
+            echo "Unexpected runtime permission found"
+            exit 1
+          fi
+          test "$(find app/src/main/assets/voice -name '*.mp3' | wc -l)" -eq 70
+
+      - name: Name APK
+        run: cp app/build/outputs/apk/release/app-release.apk ../U1-Field-Phraseboard-v0.1.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: U1-Field-Phraseboard-v0.1-APK
+          path: U1-Field-Phraseboard-v0.1.apk
+          if-no-files-found: error
+
+      - name: Publish sideload release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd ..
+          if gh release view u1-field-phraseboard-v0.1 >/dev/null 2>&1; then
+            gh release upload u1-field-phraseboard-v0.1 U1-Field-Phraseboard-v0.1.apk --clobber
+          else
+            gh release create u1-field-phraseboard-v0.1 U1-Field-Phraseboard-v0.1.apk \
+              --target "$GITHUB_SHA" \
+              --title "U1 Field Phraseboard v0.1" \
+              --notes "Offline Android shadow pilot for fixed medic-to-patient phrases in NYC Local Law 30 languages. ElevenLabs voice is generated at build time and bundled in the APK. Runtime has zero Android permissions and no network capability. Translations require bilingual clinical validation before operational reliance."
+          fi
