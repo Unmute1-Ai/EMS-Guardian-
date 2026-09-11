@@ -1,10 +1,12 @@
 # EMS Guardian
 
+[Portfolio](https://github.com/Unmute1-Ai/Unmute1ai#readme) · [Engineering](https://github.com/Unmute1-Ai/U1Ai#readme) · [Security evidence](https://github.com/Unmute1-Ai/glass-box#readme)
+
 **Edge-first communication and field-assistance software for emergency-services workflows.**
 
 EMS Guardian combines an accessible field interface, translation/ASL support, structured handoff tooling, and AI-assisted workflow components. The repository includes a Vite/React application, production container configuration, environment templates, deployment guidance, and verification scripts.
 
-> **Status: production candidate, not a certified medical device and not independently certified for HIPAA or clinical compliance.** Any real-world emergency or healthcare deployment requires security review, medical-direction approval, jurisdiction-specific validation, privacy review, and authenticated integrations.
+> **Status: development application, not a certified medical device and not independently certified for HIPAA or clinical compliance.** Any real-world emergency or healthcare deployment requires security review, medical-direction approval, jurisdiction-specific validation, privacy review, and authenticated integrations.
 
 ## What it includes
 
