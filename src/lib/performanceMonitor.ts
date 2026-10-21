@@ -128,7 +128,7 @@ export class MemoryLeakDetector {
     const memory = performance?.memory;
 
     return {
-      tracked: this.observers.size || 0,
+      tracked: 0, // WeakMap is not enumerable
       approximateSize: memory ? `${(memory.usedJSHeapSize / 1048576).toFixed(2)} MB` : 'N/A'
     };
   }

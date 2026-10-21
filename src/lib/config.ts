@@ -10,8 +10,8 @@ interface Config {
 }
 
 const validateEnv = (): Config => {
-  const geminiApiKey = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
-  const appUrl = process.env.APP_URL || import.meta.env.VITE_APP_URL || window.location.origin;
+  const geminiApiKey = 'server-side'; // key lives on the API server (server/index.ts)
+  const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
   const isDevelopment = import.meta.env.DEV;
   const isProduction = import.meta.env.PROD;
 

@@ -1,5 +1,5 @@
 # Use multi-stage build for optimal image size
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -9,20 +9,20 @@ RUN apk add --no-cache python3 make g++
 # Copy package files
 COPY package*.json ./
 COPY tsconfig.json ./
-COPY vite.config.ts ./
+COPY vite.config.ts index.html ./
 
 # Install dependencies
 RUN npm ci
 
 # Copy source code
 COPY src ./src
-COPY public ./public
+COPY server ./server
 
 # Build application
 RUN npm run build
 
 # Production stage
-FROM node:18-alpine
+FROM node:20-alpine
 
 # Install security packages
 RUN apk add --no-cache tini curl
@@ -35,11 +35,11 @@ WORKDIR /app
 
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/server ./server
+COPY --from=builder /app/tsconfig.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY package*.json ./
 
-# Copy certificates if available
-COPY --chown=ems-guardian:nodejs certs/ ./certs/ 2>/dev/null || 
 
 
 
@@ -62,7 +62,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 ENTRYPOINT ["/sbin/tini", "--"]
 
 # Start application
-CMD ["node", "--max-old-space-size=512", "dist/main.js"]
+ENV NODE_ENV=production PORT=3000
+CMD ["npx", "tsx", "server/index.ts"]
 
 # Metadata labels
 LABEL org.opencontainers.image.title="EMS Guardian"

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
+import { getLiveToken } from '../services/geminiService';
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error';
 
@@ -21,9 +22,10 @@ export function useGeminiLive(customInstruction?: string, onHazardsDetected?: (h
     if (status === 'connected') return;
     
     setStatus('connecting');
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
     try {
+      // Ephemeral token from our server; the real key never reaches the browser.
+      const ai = new GoogleGenAI({ apiKey: await getLiveToken(), httpOptions: { apiVersion: 'v1alpha' } });
       const session = await ai.live.connect({
         model: "gemini-2.5-flash-native-audio-preview-12-2025",
         config: {

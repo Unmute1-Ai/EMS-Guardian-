@@ -9,20 +9,7 @@
  * - POLICE: steady tactical voice
  */
 
-import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
-
 export type Agency = "EMS" | "FIRE" | "POLICE";
-
-const client = new ElevenLabsClient({
-  apiKey: process.env.ELEVENLABS_API_KEY || (import.meta as any).env?.VITE_ELEVENLABS_API_KEY,
-});
-
-// Replace these with your preferred voice IDs from the ElevenLabs dashboard
-const VOICES: Record<Agency, string> = {
-  EMS: "pNInz6obpgDQGcFmaJgB", // calm, clear medical
-  FIRE: "EXAVITQu4vr4xnSDxMaL", // strong command
-  POLICE: "21m00Tcm4TlvDq8ikWAM", // steady tactical
-};
 
 let currentAudio: HTMLAudioElement | null = null;
 
@@ -40,21 +27,14 @@ export async function speak(text: string, agency: Agency = "EMS"): Promise<void>
   }
 
   try {
-    const audioStream = await client.textToSpeech.stream(VOICES[agency], {
-      text: text.slice(0, 1000), // safety limit
-      modelId: "eleven_flash_v2_5", // lowest latency
-      outputFormat: "mp3_44100_128",
+    // Voices and the API key live on the server (server/index.ts)
+    const res = await fetch("/api/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: text.slice(0, 1000), agency }),
     });
-
-    // Convert stream to blob and play
-    const chunks: Uint8Array[] = [];
-    for await (const chunk of audioStream) {
-      if (chunk instanceof Uint8Array) {
-        chunks.push(chunk);
-      }
-    }
-
-    const blob = new Blob(chunks as BlobPart[], { type: "audio/mpeg" });
+    if (!res.ok) throw new Error(`TTS failed (${res.status})`);
+    const blob = await res.blob();
     const url = URL.createObjectURL(blob);
 
     currentAudio = new Audio(url);
