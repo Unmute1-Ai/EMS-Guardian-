@@ -1,65 +1,90 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  
-  --color-cad-bg: #000000;
-  --color-cad-surface: #0A0A0A;
-  --color-cad-border: #222222;
-  --color-cad-text: #FFFFFF;
-  --color-cad-muted: #666666;
-  
-  /* FDNY Status Colors */
-  --color-cad-green: #00FF00;  /* Available / In Service */
-  --color-cad-red: #FF0000;    /* En Route / Emergency */
-  --color-cad-amber: #FFFF00;  /* On Scene / Warning */
-  --color-cad-cyan: #00FFFF;   /* Hospital / Transport */
-  --color-cad-blue: #0000FF;   /* Police / Secondary */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+
+  --color-cad-bg: #070B12;
+  --color-cad-surface: #0D1421;
+  --color-cad-border: #243248;
+  --color-cad-text: #F4F7FB;
+  --color-cad-muted: #91A0B5;
+
+  /* U1 brand: gold for ready states, cyan for communication, blue for navigation.
+     Keep red reserved for genuine safety-critical warnings. */
+  --color-cad-green: #F5C451;
+  --color-cad-red: #FF5263;
+  --color-cad-amber: #26D9F2;
+  --color-cad-cyan: #26D9F2;
+  --color-cad-blue: #527BFF;
 }
 
 @layer base {
+  :root { color-scheme: dark; font-synthesis: none; text-rendering: optimizeLegibility; }
+  html { min-height: 100%; background: #070B12; }
   body {
-    @apply bg-cad-bg text-cad-text font-sans antialiased;
+    min-height: 100vh;
+    margin: 0;
+    background:
+      radial-gradient(ellipse at 12% -10%, rgba(38, 217, 242, .10), transparent 38rem),
+      radial-gradient(ellipse at 95% 0%, rgba(82, 123, 255, .10), transparent 34rem),
+      #070B12;
+    color: #F4F7FB;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    padding-bottom: env(safe-area-inset-bottom);
   }
+  * { -webkit-tap-highlight-color: transparent; }
+  button, input, textarea, select { font: inherit; }
+  button { touch-action: manipulation; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+    outline: 2px solid #26D9F2;
+    outline-offset: 3px;
+  }
+  ::selection { background: rgba(38, 217, 242, .28); color: #fff; }
 }
 
 @layer components {
-  .cad-panel {
-    @apply bg-cad-surface border border-cad-border rounded-none;
-  }
-  
-  .cad-header {
-    @apply bg-cad-border text-cad-text px-2 py-1 text-[10px] font-bold uppercase tracking-wider;
-  }
+  .cad-panel { background: rgba(13, 20, 33, .88); border: 1px solid #243248; border-radius: 1rem; }
+  .cad-header { background: rgba(25, 37, 56, .85); color: #DCE7F5; padding: .65rem .85rem; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .13em; }
+  .cad-value { font-family: var(--font-mono); color: #F5C451; }
+  .cad-glow-green { box-shadow: 0 0 22px rgba(245, 196, 81, .13); }
+  .cad-glow-red { box-shadow: 0 0 22px rgba(255, 82, 99, .16); }
+  .cad-grid-bg { background-image: radial-gradient(circle, rgba(145,160,181,.12) 1px, transparent 1px); background-size: 22px 22px; }
+  .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background: #34445B; border-radius: 999px; }
+}
 
-  .cad-value {
-    @apply font-mono text-cad-green;
-  }
-
-  .cad-glow-green {
-    box-shadow: 0 0 10px rgba(0, 255, 0, 0.2);
-  }
-
-  .cad-glow-red {
-    box-shadow: 0 0 10px rgba(255, 0, 0, 0.2);
-  }
-
-  .cad-grid-bg {
-    background-image: radial-gradient(circle, #111 1px, transparent 1px);
-    background-size: 20px 20px;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 4px;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #333;
-    border-radius: 2px;
-  }
+/* Premium surface polish. These unlayered rules intentionally refine the existing
+   utility-first interface without replacing the working feature components. */
+.bg-cad-bg { background-color: transparent !important; }
+.bg-cad-surface { background-color: rgba(13, 20, 33, .86) !important; }
+.border-cad-border { border-color: #26364D !important; }
+.rounded-none { border-radius: 1rem !important; }
+.bg-cad-border { background-color: rgba(29, 43, 63, .92) !important; }
+.text-cad-muted { color: #91A0B5 !important; }
+.text-cad-green { color: #F5C451 !important; }
+.bg-cad-green { background-color: #F5C451 !important; }
+.border-cad-green { border-color: #F5C451 !important; }
+.text-cad-amber { color: #26D9F2 !important; }
+.bg-cad-amber { background-color: #26D9F2 !important; }
+.border-cad-amber { border-color: #26D9F2 !important; }
+.text-cad-cyan { color: #26D9F2 !important; }
+.border-cad-cyan { border-color: #26D9F2 !important; }
+.text-cad-blue { color: #7896FF !important; }
+.bg-cad-blue { background-color: #527BFF !important; }
+.border-cad-blue { border-color: #527BFF !important; }
+[class*="border-cad-border"], [class*="border-cad-green"], [class*="border-cad-cyan"], [class*="border-cad-amber"] { border-radius: .8rem; }
+button { transition: background-color .18s ease, border-color .18s ease, color .18s ease, transform .18s ease, box-shadow .18s ease; }
+button:not(:disabled):active { transform: scale(.985); }
+button:disabled { cursor: not-allowed; }
+input, textarea, select { border-radius: .8rem; }
+@media (max-width: 640px) {
+  body { font-size: 14px; }
+  button { min-height: 40px; }
+  input, select { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
