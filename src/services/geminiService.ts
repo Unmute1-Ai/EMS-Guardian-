@@ -23,7 +23,29 @@ export async function generateImage(prompt: string) {
 }
 
 export async function generateHandoffReport(input: string) {
-  return (await post<{ text: string }>("handoff", { input })).text;
+  try {
+    if (!navigator.onLine) throw new Error("offline");
+    return (await post<{ text: string }>("handoff", { input })).text;
+  } catch {
+    return offlineHandoffReport(input);
+  }
+}
+
+/** Deterministic MIST handoff used when the AI service is unreachable. */
+export function offlineHandoffReport(input: string): string {
+  const now = new Date().toLocaleString();
+  return [
+    "## EMS HANDOFF (MIST) - OFFLINE DRAFT",
+    `*Generated on-device at ${now}. AI service unavailable; verify before transfer.*`,
+    "",
+    "**M - Mechanism / Medical complaint:** _",
+    "**I - Injuries / Illness findings:** _",
+    "**S - Signs (vitals):** BP _ / HR _ / RR _ / SpO2 _ / GCS _",
+    "**T - Treatment given:** _",
+    "",
+    "### Field notes (verbatim)",
+    input.trim(),
+  ].join("\n");
 }
 
 export async function translateGlosstoEnglish(glosses: string[]) {

@@ -1,3 +1,6 @@
+# Secure build pipeline aligned to NIST SP 800-218 (SSDF). Practice IDs in comments;
+# see docs/security/NIST-800-53-CONTROL-MAP.md for the full mapping.
+# All third-party actions are pinned to full commit SHAs (PS.2 / PW.4: no mutable tags).
 name: CI
 
 on:
@@ -13,13 +16,53 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
-      - run: npm ci
-      - run: npm run lint
+      - run: npm ci --ignore-scripts # PW.4: no install-time code execution
+      - run: npm run lint # PW.7: type-check frontend + server
       - run: npm run build
-      - name: Production dependency audit
+      - name: Production dependency audit # PW.4 / RV.1
         run: npm audit --omit=dev --audit-level=high
+      - name: SBOM (CycloneDX) # PS.3: record what ships
+        run: npm sbom --omit=dev --sbom-format=cyclonedx > sbom.cdx.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom.cdx.json
+          retention-days: 90
+
+  secrets-scan: # PS.1 / PW.9: no credentials in source
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        run: docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.18.4 detect --source /repo --redact --exit-code 1
+
+  codeql: # PW.7 / PW.8: static analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: github/codeql-action/init@4bfa242aa49c5f7c6770b98670d354a7dfac05f8 # v3
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+      - uses: github/codeql-action/analyze@4bfa242aa49c5f7c6770b98670d354a7dfac05f8 # v3
+
+  dependency-review: # PW.4: block new vulnerable / copyleft deps on PRs
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
+        with:
+          fail-on-severity: high

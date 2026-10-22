@@ -41,7 +41,8 @@ export const ASLTranslator: React.FC<{ location?: { lat: number; lng: number; cr
     if (!videoRef.current || !canvasRef.current) return;
 
     const hands = new Hands({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+      // Self-hosted (scripts/copy-mediapipe.mjs) so hand tracking works offline
+      locateFile: (file) => `/mediapipe/hands/${file}`,
     });
 
     hands.setOptions({

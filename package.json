@@ -5,6 +5,9 @@
   "type": "module",
   "description": "Accessible field-assistance and communication application for emergency-services workflow development",
   "scripts": {
+    "assets": "node scripts/copy-mediapipe.mjs",
+    "predev": "node scripts/copy-mediapipe.mjs",
+    "prebuild": "node scripts/copy-mediapipe.mjs",
     "dev": "concurrently -k -n api,web \"npm:dev:api\" \"npm:dev:web\"",
     "dev:web": "vite --port=3000 --host=0.0.0.0",
     "dev:api": "tsx watch server/index.ts",

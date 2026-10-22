@@ -13,6 +13,14 @@ export type Agency = "EMS" | "FIRE" | "POLICE";
 
 let currentAudio: HTMLAudioElement | null = null;
 
+function speakOnDevice(text: string) {
+  if (typeof speechSynthesis === "undefined") return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text.slice(0, 1000));
+  u.rate = 1.05;
+  speechSynthesis.speak(u);
+}
+
 /**
  * Speak text using the agency-specific voice.
  * Automatically stops any currently playing speech.
@@ -28,6 +36,7 @@ export async function speak(text: string, agency: Agency = "EMS"): Promise<void>
 
   try {
     // Voices and the API key live on the server (server/index.ts)
+    if (!navigator.onLine) throw new Error("offline");
     const res = await fetch("/api/tts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -47,7 +56,9 @@ export async function speak(text: string, agency: Agency = "EMS"): Promise<void>
       currentAudio = null;
     };
   } catch (err) {
-    console.error("ElevenLabs speak error:", err);
+    // Offline / server unreachable: fall back to the device's built-in voice
+    console.warn("Cloud TTS unavailable, using on-device speech:", err);
+    speakOnDevice(text);
   }
 }
 
