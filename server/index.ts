@@ -3,8 +3,7 @@
  * Holds the Gemini and ElevenLabs keys so they never ship in the browser bundle,
  * and serves the built SPA from dist/ in production.
  */
-import dotenv from "dotenv";
-dotenv.config({ path: [".env.local", ".env"] });
+import "./env";
 
 import path from "path";
 import express from "express";
@@ -12,8 +11,37 @@ import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import { Modality } from "@google/genai";
 import * as gemini from "./gemini";
+import { requireAuth, authConfigured, authDisabled, type AuthedRequest } from "./auth";
 
 const PROD = process.env.NODE_ENV === "production" || process.argv.includes("--production");
+
+/*
+ * COMPLIANCE_MODE = "hipaa" | "fedramp" makes the server refuse unsafe configurations
+ * at startup (fail closed) instead of discovering them in an audit.
+ *  hipaa:   sign-in required; Gemini only via Vertex AI (covered by Google Cloud BAA);
+ *           ElevenLabs only if ELEVENLABS_BAA=true (enterprise BAA on file).
+ *  fedramp: everything in hipaa, plus no non-FedRAMP processors: ElevenLabs is off
+ *           (spoken alerts use the device voice); Gemini Live is off.
+ */
+const MODE = (process.env.COMPLIANCE_MODE || "").toLowerCase();
+const STRICT = MODE === "hipaa" || MODE === "fedramp";
+export const ttsAllowed =
+  Boolean(process.env.ELEVENLABS_API_KEY) && MODE !== "fedramp" && (MODE !== "hipaa" || process.env.ELEVENLABS_BAA === "true");
+const liveAllowed = MODE !== "fedramp" && !gemini.usingVertex; // ephemeral Live tokens are an AI Studio feature
+if (STRICT) {
+  const problems: string[] = [];
+  if (authDisabled) problems.push("AUTH_DISABLED must not be set");
+  if (!authConfigured) problems.push("OIDC_ISSUER and OIDC_AUDIENCE are required");
+  if (!gemini.usingVertex && gemini.geminiConfigured) problems.push("Gemini must use Vertex AI (GOOGLE_GENAI_USE_VERTEXAI=true), not an AI Studio key");
+  if (!process.env.TRUST_PROXY) problems.push("TRUST_PROXY must be set (TLS terminates at the proxy)");
+  if (problems.length) {
+    console.error(`COMPLIANCE_MODE=${MODE} refused to start:\n - ${problems.join("\n - ")}`);
+    process.exit(1);
+  }
+}
+if (PROD && !STRICT && (authDisabled || !authConfigured)) {
+  console.warn("WARNING: /api is running without sign-in. Demo / synthetic data only.");
+}
 const PORT = Number(PROD ? process.env.PORT || 3000 : process.env.API_PORT || 8787);
 const app = express();
 
@@ -51,7 +79,7 @@ app.use("/api", (req, res, next) => {
   const start = Date.now();
   res.on("finish", () => {
     console.log(
-      JSON.stringify({ ts: new Date().toISOString(), evt: "api", method: req.method, path: req.path, status: res.statusCode, ms: Date.now() - start, ip: req.ip }),
+      JSON.stringify({ ts: new Date().toISOString(), evt: "api", method: req.method, path: req.path, status: res.statusCode, ms: Date.now() - start, ip: req.ip, user: (req as AuthedRequest).user?.sub ?? null }),
     );
   });
   next();
@@ -70,6 +98,8 @@ app.use("/api", (req, res, next) => {
 app.use("/api", rateLimit({ windowMs: 60_000, limit: 60, standardHeaders: true, legacyHeaders: false }));
 // Live tokens are the most expensive capability; tighter limit.
 app.use("/api/ai/live-token", rateLimit({ windowMs: 60_000, limit: 6, standardHeaders: true, legacyHeaders: false }));
+// IA-2 / AC-3: every API call needs a verified sign-in (set AUTH_DISABLED=true only for local demos).
+app.use("/api", requireAuth);
 
 const asyncRoute =
   (fn: (req: express.Request, res: express.Response) => Promise<unknown>) =>
@@ -99,7 +129,7 @@ const cleanHistory = (h: unknown) =>
     .filter((t) => t.parts[0].text);
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true, gemini: gemini.geminiConfigured, elevenlabs: Boolean(process.env.ELEVENLABS_API_KEY) });
+  res.json({ ok: true, mode: MODE || "demo", auth: authDisabled ? "disabled" : authConfigured ? "oidc" : "unconfigured", gemini: gemini.geminiConfigured ? (gemini.usingVertex ? "vertex" : "ai-studio") : false, tts: ttsAllowed, live: liveAllowed });
 });
 
 // ---------------- Gemini ----------------
@@ -139,6 +169,7 @@ app.post("/api/ai/cross-streets", asyncRoute(async (req, res) => {
 
 // Short-lived, single-use token so the browser can open a Gemini Live socket without the real key.
 app.post("/api/ai/live-token", asyncRoute(async (_req, res) => {
+  if (!liveAllowed) return res.status(501).json({ error: "Live sessions are disabled in this compliance mode" });
   const now = Date.now();
   const token = await gemini.getAI().authTokens.create({
     config: {
@@ -159,7 +190,8 @@ const VOICES: Record<string, string> = {
 };
 // Plain REST call: the ElevenLabs SDK adds ~50s of startup time for one endpoint.
 app.post("/api/tts", asyncRoute(async (req, res) => {
-  if (!process.env.ELEVENLABS_API_KEY) throw new Error("ELEVENLABS_API_KEY is not set on the server");
+  // 503 makes the browser fall back to the on-device voice (no PHI leaves the device)
+  if (!ttsAllowed) return res.status(503).json({ error: "Cloud voice unavailable; using device voice" });
   const text = str(req.body.text, 1000).trim();
   if (!text) return res.status(400).json({ error: "text required" });
   const voice = VOICES[str(req.body.agency)] ?? VOICES.EMS;

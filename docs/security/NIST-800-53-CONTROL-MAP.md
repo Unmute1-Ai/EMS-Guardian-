@@ -15,12 +15,12 @@ Legend: **Met** = implemented in this repo and testable · **Partial** = some im
 
 | # | Finding | Controls | Status |
 |---|---------|----------|--------|
-| B1 | **No server-side authentication.** `/api/*` is protected only by origin check + rate limiting. `src/lib/authManager.ts` runs in the browser and is not wired into the app, so it provides no protection. | IA-2, IA-5, AC-2, AC-3 | **Not met** |
-| B2 | **"HIPAA" / encryption modules are inert.** `src/lib/hipaaCompliance.ts` and `src/lib/security.ts` run in the browser, are never imported by the running app, and fall back to the default key `change-me-in-production`. Browser-side keys provide no confidentiality. | SC-28, SC-12, SC-13 | **Not met** |
-| B3 | **PHI flows to third-party AI** (Google Gemini, ElevenLabs) with no BAA or data-processing agreement recorded in the repo. | SA-9, PT-2, PT-3 | **Not met** (contractual) |
+| B1 | **Server-side authentication.** OIDC token verification on every `/api` call (`server/auth.ts`): issuer, audience, expiry, asymmetric algorithms, optional role. Tested against a local IdP (valid / expired / wrong audience / forged / missing role). Needs the agency IdP wired in. | IA-2, IA-5, AC-2, AC-3 | **Partial** (code done; IdP integration open) |
+| B2 | **Inert browser-side "HIPAA" / encryption modules removed.** Nothing in the repo claims protection it doesn't provide. | SC-28, SC-12, SC-13 | **Resolved** |
+| B3 | **PHI to third-party AI.** `COMPLIANCE_MODE=hipaa` forces Gemini through Vertex AI (BAA-eligible) and blocks ElevenLabs unless a BAA is on file. **The BAAs themselves still need to be signed.** | SA-9, PT-2, PT-3 | **Partial** (contractual) |
 | B4 | **No FIPS 140-3 validated crypto module** in the app tier. TLS termination at nginx must use a FIPS-validated OpenSSL build for federal use. | SC-13 | **Inherited / Not met** |
 
-Until B1–B3 are closed, the app must only be used with **synthetic data** (training/demo).
+Until B1 and B3 are fully closed (IdP wired in, BAAs signed), the app must only be used with **synthetic data** (training/demo).
 
 ---
 
@@ -29,14 +29,14 @@ Until B1–B3 are closed, the app must only be used with **synthetic data** (tra
 ### Access Control (AC)
 | Control | Implementation | Status |
 |---|---|---|
-| AC-3 Access enforcement | None server-side (see B1). | Not met |
+| AC-3 Access enforcement | Every `/api` route requires a verified token; optional required role (`OIDC_REQUIRED_ROLE`). | Met (app tier) |
 | AC-4 Information flow | `/api` rejects browser requests from foreign origins (`server/index.ts`, `ALLOWED_ORIGINS`). Service worker never caches `/api/*` responses. | Partial |
 | AC-17 Remote access | Inherited from deployment (VPN / zero-trust edge). | Inherited |
 
 ### Audit & Accountability (AU)
 | Control | Implementation | Status |
 |---|---|---|
-| AU-2 / AU-3 Event logging & content | One JSON line per `/api` call: timestamp, method, path, status, latency, client IP, including denials. Request bodies are **never** logged (PHI). | Partial: no user identity (needs B1) |
+| AU-2 / AU-3 Event logging & content | One JSON line per `/api` call: timestamp, method, path, status, latency, client IP, including denials. Request bodies are **never** logged (PHI). | Met: includes the user `sub` from the verified token |
 | AU-9 Protection of audit info | Logs go to stdout; retention and tamper-protection must come from the log pipeline. | Inherited |
 | AU-12 Audit generation | Middleware runs before the origin check and rate limiter. | Met |
 
@@ -50,7 +50,7 @@ Until B1–B3 are closed, the app must only be used with **synthetic data** (tra
 ### Identification & Authentication (IA)
 | Control | Status |
 |---|---|
-| IA-2, IA-5, IA-8 | **Not met** (B1). Recommended: OIDC via the agency IdP with PIV/CAC or phishing-resistant MFA, validated by the API server (`jose` is already a dependency). |
+| IA-2, IA-5, IA-8 | **Partial**: OIDC tokens verified server-side (`server/auth.ts`). The agency IdP must enforce PIV/CAC or phishing-resistant MFA. |
 
 ### Incident Response (IR)
 | Control | Status |

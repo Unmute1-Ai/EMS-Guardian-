@@ -1,11 +1,26 @@
 import { GoogleGenAI } from "@google/genai";
 
+/*
+ * Two ways to reach Gemini:
+ *  - Vertex AI (GOOGLE_GENAI_USE_VERTEXAI=true + GOOGLE_CLOUD_PROJECT/LOCATION): Google Cloud
+ *    service that can be covered by a Google Cloud BAA and is FedRAMP authorized. Credentials come
+ *    from the workload identity / service account (ADC), never an API key. Required for real PHI.
+ *  - AI Studio key (GEMINI_API_KEY): demos and synthetic data only.
+ */
+export const usingVertex = process.env.GOOGLE_GENAI_USE_VERTEXAI === "true";
 const apiKey = process.env.GEMINI_API_KEY;
-export const geminiConfigured = Boolean(apiKey);
+export const geminiConfigured = usingVertex ? Boolean(process.env.GOOGLE_CLOUD_PROJECT) : Boolean(apiKey);
 let _ai: GoogleGenAI | null = null;
 export function getAI(): GoogleGenAI {
-  if (!apiKey) throw new Error("GEMINI_API_KEY is not set on the server");
-  return (_ai ??= new GoogleGenAI({ apiKey }));
+  if (_ai) return _ai;
+  if (usingVertex) {
+    if (!process.env.GOOGLE_CLOUD_PROJECT) throw new Error("GOOGLE_CLOUD_PROJECT is not set on the server");
+    _ai = new GoogleGenAI({ vertexai: true, project: process.env.GOOGLE_CLOUD_PROJECT, location: process.env.GOOGLE_CLOUD_LOCATION || "us-central1" });
+  } else {
+    if (!apiKey) throw new Error("GEMINI_API_KEY is not set on the server");
+    _ai = new GoogleGenAI({ apiKey });
+  }
+  return _ai;
 }
 
 export async function generateSimulatorScenario(userAction?: string, history: any[] = []) {
