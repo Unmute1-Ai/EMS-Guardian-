@@ -53,8 +53,8 @@ app.disable("x-powered-by");
 // SC-7 / SI-10: strict CSP. wasm-unsafe-eval is required by MediaPipe; Gemini Live uses wss.
 app.use(
   helmet({
-    contentSecurityPolicy: PROD
-      ? {
+    // Always on: in dev, Vite serves the pages, so this only covers API responses.
+    contentSecurityPolicy: {
           directives: {
             defaultSrc: ["'self'"],
             scriptSrc: ["'self'", "'wasm-unsafe-eval'"],
@@ -68,8 +68,7 @@ app.use(
             baseUri: ["'self'"],
             formAction: ["'self'"],
           },
-        }
-      : false,
+        },
     crossOriginEmbedderPolicy: false,
   }),
 );
@@ -106,7 +105,8 @@ const asyncRoute =
   (fn: (req: express.Request, res: express.Response) => Promise<unknown>) =>
   (req: express.Request, res: express.Response) =>
     fn(req, res).catch((err) => {
-      console.error(`[api] ${req.path}:`, err?.message || err);
+      // Structured JSON: user input never becomes a format string or a forged log line (CWE-134/117)
+      console.error(JSON.stringify({ ts: new Date().toISOString(), evt: "api_error", path: req.path, error: String(err?.message || err) }));
       // SI-11: don't echo upstream error detail to clients; config errors are safe to surface.
       const msg = String(err?.message || "");
       if (msg === "bad-coords") return res.status(400).json({ error: "lat/lng out of range" });
@@ -225,13 +225,15 @@ app.post("/api/tts", asyncRoute(async (req, res) => {
 // Last-resort error handler: JSON only, never a stack trace (SI-11).
 app.use("/api", (err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   const status = Number(err?.status || err?.statusCode) || 500;
-  if (status >= 500) console.error("[api] unhandled:", err?.message || err);
+  if (status >= 500) console.error(JSON.stringify({ ts: new Date().toISOString(), evt: "api_unhandled", error: String(err?.message || err) }));
   res.status(status).json({ error: status === 413 ? "Request too large" : status < 500 ? "Bad request" : "Server error" });
 });
 
 // ---------------- Static SPA (production) ----------------
 if (PROD) {
   const dist = path.resolve("dist");
+  // Pages and assets get their own (looser) limit: a field device loads ~20 files on first visit.
+  app.use(rateLimit({ windowMs: 60_000, limit: 600, standardHeaders: true, legacyHeaders: false }));
   // sw.js must revalidate so field devices pick up new versions
   app.get("/sw.js", (_req, res) => res.set("Cache-Control", "no-cache").sendFile(path.join(dist, "sw.js")));
   app.use(express.static(dist, { maxAge: "1h", index: false }));
