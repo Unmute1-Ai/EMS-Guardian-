@@ -6,6 +6,7 @@
 import "./env";
 
 import path from "path";
+import { pathToFileURL } from "url";
 import express from "express";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
@@ -108,6 +109,7 @@ const asyncRoute =
       console.error(`[api] ${req.path}:`, err?.message || err);
       // SI-11: don't echo upstream error detail to clients; config errors are safe to surface.
       const msg = String(err?.message || "");
+      if (msg === "bad-coords") return res.status(400).json({ error: "lat/lng out of range" });
       res.status(502).json({ error: /is not set on the server/.test(msg) ? msg : "AI service unavailable" });
     });
 
@@ -127,6 +129,16 @@ const cleanHistory = (h: unknown) =>
       parts: [{ text: str(t?.parts?.[0]?.text, 4000) }],
     }))
     .filter((t) => t.parts[0].text);
+
+// Readiness: can this instance serve real traffic? (load balancers route on this; /health is liveness)
+let ready = true;
+app.get("/ready", (_req, res) => {
+  const problems: string[] = [];
+  if (!ready) problems.push("shutting down");
+  if (PROD && !authDisabled && !authConfigured) problems.push("sign-in not configured");
+  if (!gemini.geminiConfigured) problems.push("AI not configured");
+  res.status(problems.length ? 503 : 200).json({ ready: !problems.length, problems });
+});
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true, mode: MODE || "demo", auth: authDisabled ? "disabled" : authConfigured ? "oidc" : "unconfigured", gemini: gemini.geminiConfigured ? (gemini.usingVertex ? "vertex" : "ai-studio") : false, tts: ttsAllowed, live: liveAllowed });
@@ -210,6 +222,13 @@ app.post("/api/tts", asyncRoute(async (req, res) => {
   res.end();
 }));
 
+// Last-resort error handler: JSON only, never a stack trace (SI-11).
+app.use("/api", (err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const status = Number(err?.status || err?.statusCode) || 500;
+  if (status >= 500) console.error("[api] unhandled:", err?.message || err);
+  res.status(status).json({ error: status === 413 ? "Request too large" : status < 500 ? "Bad request" : "Server error" });
+});
+
 // ---------------- Static SPA (production) ----------------
 if (PROD) {
   const dist = path.resolve("dist");
@@ -219,6 +238,24 @@ if (PROD) {
   app.get(/^(?!\/api\/).*/, (_req, res) => res.sendFile(path.join(dist, "index.html")));
 }
 
-app.listen(PORT, () => {
-  console.log(`EMS Guardian API on :${PORT} (gemini=${gemini.geminiConfigured}, elevenlabs=${Boolean(process.env.ELEVENLABS_API_KEY)})`);
-});
+export { app };
+
+// Start only when run directly (tests import the app without listening).
+const isMain = Boolean(process.argv[1]) && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+if (isMain) {
+  const server = app.listen(PORT, () => {
+    console.log(JSON.stringify({ ts: new Date().toISOString(), evt: "start", port: PORT, mode: MODE || "demo", auth: authDisabled ? "disabled" : "oidc", gemini: gemini.usingVertex ? "vertex" : gemini.geminiConfigured ? "ai-studio" : "off", tts: ttsAllowed }));
+  });
+  // Graceful shutdown: stop taking new requests, let in-flight ones finish (rolling deploys, CP-10).
+  let stopping = false;
+  const shutdown = (sig: string) => {
+    if (stopping) return;
+    stopping = true;
+    ready = false;
+    console.log(JSON.stringify({ ts: new Date().toISOString(), evt: "shutdown", signal: sig }));
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(1), 10_000).unref();
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+}

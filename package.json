@@ -17,7 +17,8 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit && tsc --noEmit -p server",
     "type-check": "tsc --noEmit",
-    "security-audit": "npm audit --production"
+    "security-audit": "npm audit --production",
+    "test": "node --import tsx --test server/*.test.ts"
   },
   "dependencies": {
     "@google/genai": "^1.45.0",

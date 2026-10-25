@@ -3,12 +3,24 @@
  * (server/index.ts), which holds the API key.
  */
 
+/** Session expired: reload once so the sign-in proxy (oauth2-proxy / ALB OIDC) sends the user to the IdP. */
+function signInAgain() {
+  try {
+    // At most one reload per minute, so a broken sign-in can't cause a reload loop
+    const last = Number(sessionStorage.getItem("argus-reauth") || 0);
+    if (Date.now() - last < 60_000) return;
+    sessionStorage.setItem("argus-reauth", String(Date.now()));
+  } catch { /* storage blocked: still try once */ }
+  location.reload();
+}
+
 async function post<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`/api/ai/${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  if (res.status === 401) signInAgain();
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `AI request failed (${res.status})`);
   return data as T;

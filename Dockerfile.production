@@ -65,11 +65,11 @@ ENTRYPOINT ["/sbin/tini", "--"]
 
 # Start application
 ENV NODE_ENV=production PORT=3000
-CMD ["npx", "tsx", "server/index.ts"]
+CMD ["node", "--import", "tsx", "server/index.ts"]
 
 # Metadata labels
-LABEL org.opencontainers.image.title="EMS Guardian"
-LABEL org.opencontainers.image.description="HIPAA & Mayo Clinic Standards Compliant EMS Tactical Medical Suite"
+LABEL org.opencontainers.image.title="Argus Responder"
+LABEL org.opencontainers.image.description="Field communication for EMS, Fire and Police (development; not a certified medical device)"
 LABEL org.opencontainers.image.version="1.0.0"
 LABEL org.opencontainers.image.vendor="EMS Guardian"
 LABEL org.opencontainers.image.documentation="https://github.com/your-org/ems-guardian/blob/main/DEPLOYMENT_GUIDE.md"
