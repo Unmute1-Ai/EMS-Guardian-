@@ -84,7 +84,7 @@ class ErrorHandler {
     }
 
     // Send to monitoring service if configured
-    if (process.env.MONITORING_ENDPOINT && severity === 'error') {
+    if (import.meta.env.VITE_MONITORING_ENDPOINT && severity === 'error') {
       this.sendToMonitoring(entry).catch(() => {
         // Fail silently to avoid cascading errors
       });
@@ -166,7 +166,7 @@ class ErrorHandler {
 
   private async sendToMonitoring(entry: ErrorLog) {
     try {
-      await fetch(process.env.MONITORING_ENDPOINT || '', {
+      await fetch(import.meta.env.VITE_MONITORING_ENDPOINT || '', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(entry)
