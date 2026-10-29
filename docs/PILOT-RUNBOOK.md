@@ -28,6 +28,8 @@ For the team standing up an Argus pilot with an EMS, Fire or Police agency.
 ```bash
 git clone https://github.com/Unmute1-Ai/EMS-Guardian- argus && cd argus
 cp .env.production.example .env.production   # fill in every value
+npm ci && npm run audit:keygen -- ./secrets   # audit signing key (once); hand secrets/audit-public.pem to the auditor
+sudo chown 1001 ./secrets/audit-signing.pem   # readable by the container user only
 docker compose -f docker-compose.production.yml --env-file .env.production up -d --build
 docker compose -f docker-compose.production.yml ps          # all healthy?
 curl -fsS https://<host>/health                             # {"ok":true,"auth":"oidc",...}
@@ -44,6 +46,7 @@ In `hipaa` / `fedramp` mode the `argus` container **will not start** if a safegu
 - [ ] Spoken alert plays on agency switch (cloud or device voice)
 - [ ] **Airplane mode:** reload; the app opens, ASL tracking works, the Report tab gives the offline template
 - [ ] `docker compose logs argus | grep '"evt":"api"'` shows entries with the tester's user id and **no request bodies**
+- [ ] Copy the thread out and verify it: `docker compose cp argus:/var/lib/argus/audit/thread.jsonl . && npm run audit:verify -- thread.jsonl secrets/audit-public.pem` prints `OK`
 - [ ] The crew lead has the support contact and knows the AI is advisory
 
 ## 4. Day-2 operations
@@ -53,6 +56,7 @@ In `hipaa` / `fedramp` mode the `argus` container **will not start** if a safegu
 | Upgrade | `git pull && docker compose ... up -d --build`; `/ready` gates traffic, shutdown is graceful (10 s drain) |
 | Rollback | `ARGUS_VERSION=<previous> docker compose ... up -d` (tag every image you deploy), or `git checkout <tag>` and rebuild |
 | Rotate secrets | Update `.env.production`, `up -d`; rotating `OAUTH2_PROXY_COOKIE_SECRET` signs everyone out |
+| Rotate the audit key | Archive and verify the current thread, then generate a new key **and** start a new thread file (the server refuses to append to a thread signed by another key) |
 | Dependency patches | Merge Dependabot PRs after CI passes; redeploy weekly |
 | Device update | Users get new versions on next reload (service worker revalidates) |
 
@@ -61,6 +65,7 @@ In `hipaa` / `fedramp` mode the `argus` container **will not start** if a safegu
 |---|---|
 | AI down / slow | Crews keep working: device voice, offline handoff template, ASL on device. Check `/ready` and the provider status page. |
 | Sign-in broken | Check the IdP and `docker compose logs oauth2-proxy`. **Do not** set `AUTH_DISABLED` on a live-PHI pilot. |
+| Audit thread fails to verify | Treat as a security incident: preserve the volume and the stack logs, note the `seq` it broke at, and compare against the SIEM copy (stdout receipts) to see what changed. |
 | Suspected data exposure | Stop the stack (`docker compose down`), preserve logs, and notify the agency privacy officer **immediately**. HIPAA breach clock: notification without unreasonable delay, ≤ 60 days. |
 | Unsafe AI output reported | Capture time + user id from the log (never the patient data), file an issue, and brief crews: AI output is advisory, follow protocol and medical control. |
 

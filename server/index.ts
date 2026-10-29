@@ -13,6 +13,7 @@ import helmet from "helmet";
 import { Modality } from "@google/genai";
 import * as gemini from "./gemini";
 import { requireAuth, authConfigured, authDisabled, type AuthedRequest } from "./auth";
+import { auditFromEnv } from "./audit";
 
 const PROD = process.env.NODE_ENV === "production" || process.argv.includes("--production");
 
@@ -29,8 +30,13 @@ const STRICT = MODE === "hipaa" || MODE === "fedramp";
 export const ttsAllowed =
   Boolean(process.env.ELEVENLABS_API_KEY) && MODE !== "fedramp" && (MODE !== "hipaa" || process.env.ELEVENLABS_BAA === "true");
 const liveAllowed = MODE !== "fedramp" && !gemini.usingVertex; // ephemeral Live tokens are an AI Studio feature
+
+// AU-9 / AU-10: signed, hash-chained audit thread (see server/audit.ts).
+const auditSetup = auditFromEnv(STRICT);
+export const audit = auditSetup.thread;
+
 if (STRICT) {
-  const problems: string[] = [];
+  const problems: string[] = [...auditSetup.problems];
   if (authDisabled) problems.push("AUTH_DISABLED must not be set");
   if (!authConfigured) problems.push("OIDC_ISSUER and OIDC_AUDIENCE are required");
   if (!gemini.usingVertex && gemini.geminiConfigured) problems.push("Gemini must use Vertex AI (GOOGLE_GENAI_USE_VERTEXAI=true), not an AI Studio key");
@@ -74,13 +80,24 @@ app.use(
 );
 app.use(express.json({ limit: "256kb" }));
 
-// AU-2 / AU-3: one structured line per API call, including denials. Never logs request bodies (may contain PHI).
+// AU-5: if the audit thread can't be written, strict deployments stop serving the API
+// rather than act without a record.
+app.use("/api", (_req, res, next) => {
+  if (STRICT && !audit.healthy) return res.status(503).json({ error: "Audit log unavailable" });
+  next();
+});
+
+// AU-2 / AU-3 / AU-9: one signed, chained receipt per API call, including denials.
+// Never records request bodies (may contain PHI).
 app.use("/api", (req, res, next) => {
   const start = Date.now();
   res.on("finish", () => {
-    console.log(
-      JSON.stringify({ ts: new Date().toISOString(), evt: "api", method: req.method, path: req.path, status: res.statusCode, ms: Date.now() - start, ip: req.ip, user: (req as AuthedRequest).user?.sub ?? null }),
-    );
+    try {
+      // originalUrl: req.path is rewritten inside mounted middleware. Query strings are dropped.
+      audit.record("api", { method: req.method, path: req.originalUrl.split("?")[0], status: res.statusCode, ms: Date.now() - start, ip: req.ip ?? null, user: (req as AuthedRequest).user?.sub ?? null });
+    } catch {
+      // audit.healthy is now false; the AU-5 gate above refuses later requests in strict mode.
+    }
   });
   next();
 });
@@ -91,7 +108,13 @@ app.use("/api", (req, res, next) => {
   const origin = req.get("origin");
   if (!origin) return next(); // same-origin fetches / non-browser clients behind auth at the edge
   const host = req.get("host");
-  if (ALLOWED_ORIGINS.has(origin) || (host && new URL(origin).host === host)) return next();
+  let originHost: string | null = null;
+  try {
+    originHost = new URL(origin).host; // "null" (sandboxed frames, file://) and junk don't parse
+  } catch {
+    originHost = null;
+  }
+  if (ALLOWED_ORIGINS.has(origin) || (host && originHost === host)) return next();
   res.status(403).json({ error: "Origin not allowed" });
 });
 
@@ -137,6 +160,7 @@ app.get("/ready", (_req, res) => {
   if (!ready) problems.push("shutting down");
   if (PROD && !authDisabled && !authConfigured) problems.push("sign-in not configured");
   if (!gemini.geminiConfigured) problems.push("AI not configured");
+  if (!audit.healthy) problems.push("audit log unavailable");
   res.status(problems.length ? 503 : 200).json({ ready: !problems.length, problems });
 });
 
@@ -246,7 +270,10 @@ export { app };
 const isMain = Boolean(process.argv[1]) && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
 if (isMain) {
   const server = app.listen(PORT, () => {
-    console.log(JSON.stringify({ ts: new Date().toISOString(), evt: "start", port: PORT, mode: MODE || "demo", auth: authDisabled ? "disabled" : "oidc", gemini: gemini.usingVertex ? "vertex" : gemini.geminiConfigured ? "ai-studio" : "off", tts: ttsAllowed }));
+    // Auditors verify the thread against this key; keep a copy outside the server.
+    console.log(JSON.stringify({ ts: new Date().toISOString(), evt: "audit_public_key", ephemeral: auditSetup.ephemeral, pem: audit.publicKeyPem() }));
+    if (auditSetup.ephemeral) console.warn("WARNING: AUDIT_SIGNING_KEY not set; audit receipts are signed with a throwaway key that dies with this process.");
+    audit.record("start", { port: PORT, mode: MODE || "demo", auth: authDisabled ? "disabled" : "oidc", gemini: gemini.usingVertex ? "vertex" : gemini.geminiConfigured ? "ai-studio" : "off", tts: ttsAllowed });
   });
   // Graceful shutdown: stop taking new requests, let in-flight ones finish (rolling deploys, CP-10).
   let stopping = false;
@@ -254,8 +281,15 @@ if (isMain) {
     if (stopping) return;
     stopping = true;
     ready = false;
-    console.log(JSON.stringify({ ts: new Date().toISOString(), evt: "shutdown", signal: sig }));
-    server.close(() => process.exit(0));
+    try {
+      audit.record("shutdown", { signal: sig });
+    } catch {
+      /* already reported by the audit thread */
+    }
+    server.close(() => {
+      audit.close();
+      process.exit(0);
+    });
     setTimeout(() => process.exit(1), 10_000).unref();
   };
   process.on("SIGTERM", () => shutdown("SIGTERM"));

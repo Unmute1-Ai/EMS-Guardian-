@@ -18,7 +18,9 @@
     "lint": "tsc --noEmit && tsc --noEmit -p server",
     "type-check": "tsc --noEmit",
     "security-audit": "npm audit --production",
-    "test": "node --import tsx --test server/*.test.ts"
+    "test": "node --import tsx --test server/*.test.ts",
+    "audit:keygen": "tsx server/audit-cli.ts keygen",
+    "audit:verify": "tsx server/audit-cli.ts verify"
   },
   "dependencies": {
     "@google/genai": "^1.45.0",

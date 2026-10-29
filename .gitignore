@@ -8,3 +8,5 @@ coverage/
 !.env.example
 !.env.production.example
 public/mediapipe/
+secrets/
+audit/

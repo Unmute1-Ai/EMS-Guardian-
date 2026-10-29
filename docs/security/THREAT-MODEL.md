@@ -31,7 +31,7 @@ Gemini Live is the exception: the browser connects to Google directly with a sin
 | T7 | Tampering | Prompt injection through spoken or translated content produces unsafe guidance | System prompts state AI output is advisory; Markdown is rendered without raw HTML | **Medium**: AI output must never be treated as a medical order (README safety boundary) |
 | T8 | Tampering | XSS via AI output or injected script | React escaping; `react-markdown` with no raw HTML; strict CSP (no inline script) | Low |
 | T9 | Tampering | Compromised npm dependency or GitHub Action | SHA-pinned actions, `--ignore-scripts`, audit gate, dependency-review, Dependabot, SBOM | Medium (supply chain is never zero) |
-| T10 | Repudiation | No record of who requested what | Per-request audit lines with IP + timestamp | Medium: no user identity until auth exists |
+| T10 | Repudiation | No record of who requested what, or a record quietly edited afterwards | Signed, hash-chained receipt per request: user `sub`, IP, route, status; verifiable with `npm run audit:verify` | Low: someone holding both the signing key and the file can rewrite history, so keep the key off the log host |
 | T11 | DoS | Request flooding or oversized bodies | Rate limits, 256 KB body cap, input length caps | Medium: volumetric DDoS needs the edge/WAF (inherited) |
 | T12 | DoS | Loss of connectivity in the field | Offline shell, self-hosted MediaPipe, on-device TTS + handoff fallback | Medium: cloud AI features are unavailable offline |
 | T13 | Elevation | Clickjacking / framing the app | `frame-ancestors 'none'`, `X-Frame-Options` | Low |
