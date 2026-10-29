@@ -4,7 +4,7 @@
  */
 
 import React, { ReactNode } from 'react';
-import { cn } from './utils';
+import { cn } from '../lib/utils';
 
 // Color system for medical interfaces
 export const premiumColors = {

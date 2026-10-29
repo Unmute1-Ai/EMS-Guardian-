@@ -4,6 +4,7 @@
  */
 
 import CryptoJS from 'crypto-js';
+import bcrypt from 'bcryptjs';
 
 export interface EncryptedData {
   iv: string;
