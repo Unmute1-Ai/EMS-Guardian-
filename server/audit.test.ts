@@ -96,7 +96,7 @@ test("the tail reader finds the last receipt in a large thread", () => {
   const t = new AuditThread(privateKey, file, quiet);
   for (let i = 0; i < 1500; i++) t.record("api", { method: "GET", path: `/x/${"p".repeat(40)}`, status: 200, user: "u" });
   t.close();
-  assert.ok(fs.statSync(file).size > 64 * 1024);
+  assert.ok(fs.readFileSync(file).byteLength > 64 * 1024);
   const t2 = new AuditThread(privateKey, file, quiet);
   t2.record("start", {});
   t2.close();
@@ -152,4 +152,22 @@ test("public key printed by the server verifies its receipts", () => {
   const t2 = new AuditThread(privateKey, null, (l) => lines.push(l));
   t2.record("start", {});
   assert.equal(verifyThread(parseThread(lines.join("\n")), pub).ok, true);
+});
+
+test("keygen never overwrites an existing signing key", () => {
+  const dir = tmp();
+  const run = () => spawnSync(process.execPath, ["--import", "tsx", "server/audit-cli.ts", "keygen", dir], { encoding: "utf8", timeout: 60_000 });
+  assert.equal(run().status, 0);
+  const first = fs.readFileSync(path.join(dir, "audit-signing.pem"), "utf8");
+  const again = run();
+  assert.equal(again.status, 2);
+  assert.match(again.stderr, /refusing to overwrite/);
+  assert.equal(fs.readFileSync(path.join(dir, "audit-signing.pem"), "utf8"), first);
+  assert.equal(fs.statSync(path.join(dir, "audit-signing.pem")).mode & 0o777, 0o600);
+});
+
+test("a corrupt last line refuses to start instead of forking the chain", () => {
+  const { file, privateKey } = sampleThread();
+  fs.appendFileSync(file, "{not json\n");
+  assert.throws(() => new AuditThread(privateKey, file, quiet), /unreadable last line/);
 });

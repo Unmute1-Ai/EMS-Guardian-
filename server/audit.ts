@@ -70,13 +70,15 @@ export function parseThread(text: string): Receipt[] {
   return text.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l) as Receipt);
 }
 
-/** Read only the tail of the file to find the last receipt (threads grow large). */
-function lastReceipt(file: string): Receipt | null {
-  if (!fs.existsSync(file)) return null;
-  const size = fs.statSync(file).size;
+/**
+ * Read only the tail of the open thread to find the last receipt (threads grow large).
+ * Works on the same descriptor the server appends through, so the file that was
+ * checked is the file that gets written (no check-then-open race).
+ */
+function lastReceipt(fd: number): Receipt | null {
+  const size = fs.fstatSync(fd).size;
   if (size === 0) return null;
-  const fd = fs.openSync(file, "r");
-  try {
+  {
     let span = Math.min(size, 64 * 1024);
     for (;;) {
       const buf = Buffer.alloc(span);
@@ -89,8 +91,6 @@ function lastReceipt(file: string): Receipt | null {
       }
       span = Math.min(size, span * 4);
     }
-  } finally {
-    fs.closeSync(fd);
   }
 }
 
@@ -109,7 +109,15 @@ export class AuditThread {
     if (key.asymmetricKeyType !== "ed25519") throw new Error("AUDIT_SIGNING_KEY must be an Ed25519 private key");
     if (file) {
       fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true, mode: 0o700 });
-      const last = lastReceipt(file);
+      // "a+": reads at explicit positions, every write appends. One descriptor for both.
+      const fd = fs.openSync(file, "a+", 0o600);
+      let last: Receipt | null;
+      try {
+        last = lastReceipt(fd);
+      } catch (err) {
+        fs.closeSync(fd);
+        throw new Error(`audit thread ${file} has an unreadable last line: ${(err as Error).message}`);
+      }
       if (last) {
         const pub = createPublicKey(key);
         let continues = false;
@@ -119,6 +127,7 @@ export class AuditThread {
           continues = false;
         }
         if (!continues) {
+          fs.closeSync(fd);
           throw new Error(
             `audit thread ${file} was signed by a different key or its last line was altered; ` +
               "point AUDIT_LOG_PATH at a new file when rotating keys, and investigate the old one",
@@ -127,7 +136,7 @@ export class AuditThread {
         this.prev = last.hash;
         this.seq = last.seq + 1;
       }
-      this.fd = fs.openSync(file, "a", 0o600);
+      this.fd = fd;
     }
   }
 

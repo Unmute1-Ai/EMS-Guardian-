@@ -17,11 +17,14 @@ if (cmd === "keygen") {
   const { privateKey, publicKey } = generateKeyPairSync("ed25519");
   const priv = path.join(dir, "audit-signing.pem");
   const pub = path.join(dir, "audit-public.pem");
-  if (fs.existsSync(priv)) {
+  try {
+    // "wx": create only. Never overwrite a signing key, and no check-then-write race.
+    fs.writeFileSync(priv, privateKey.export({ type: "pkcs8", format: "pem" }), { mode: 0o600, flag: "wx" });
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
     console.error(`${priv} already exists; refusing to overwrite a signing key`);
     process.exit(2);
   }
-  fs.writeFileSync(priv, privateKey.export({ type: "pkcs8", format: "pem" }), { mode: 0o600 });
   fs.writeFileSync(pub, publicKey.export({ type: "spki", format: "pem" }));
   console.log(`Signing key: ${priv}  (set AUDIT_SIGNING_KEY_FILE to this; keep it off the log pipeline)`);
   console.log(`Public key:  ${pub}   (give this to whoever audits)`);
