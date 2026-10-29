@@ -4,13 +4,13 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import securityManager from './lib/security';
-import hipaaCompliance from './lib/hipaaCompliance';
-import mayoClinicStandards from './lib/mayoClinicStandards';
-import auditLogger from './lib/auditLogger';
-import authManager from './lib/authManager';
-import errorHandler from './lib/errorHandler';
-import { configManager } from './lib/productionConfig';
+import securityManager from './security';
+import hipaaCompliance from './hipaaCompliance';
+import mayoClinicStandards from './mayoClinicStandards';
+import auditLogger from './auditLogger';
+import authManager from './authManager';
+import { errorHandler } from './errorHandler';
+import { configManager } from './productionConfig';
 
 export interface InitializationStatus {
   security: boolean;
