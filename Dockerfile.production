@@ -4,12 +4,14 @@
 # limits) as the single, actually-consumed serving configuration. No Node or
 # Express server runs in production — the build output is the entire
 # deployment surface.
-FROM node:18-alpine AS builder
+# Builder: glibc Node 22 (npm 10). The former node:18-alpine builder hit
+# npm/cli#4828 — npm 9 on musl skipped @tailwindcss/oxide's platform-specific
+# native binding from the glibc-generated lockfile, failing `vite build`.
+# Node 22 satisfies the engines floor (node >=18, npm >=9) and matches the
+# glibc environment where CI and local builds are proven green.
+FROM node:22 AS builder
 
 WORKDIR /app
-
-# Install build dependencies
-RUN apk add --no-cache python3 make g++
 
 # Copy package files
 COPY package*.json ./
@@ -21,6 +23,9 @@ RUN npm ci
 
 # Copy source code and static marketing pages
 # (public/** — welcome/, argus/, accessguard/ — is copied verbatim into dist/)
+# index.html is the Vite entry module — without it `vite build` fails with
+# "Could not resolve entry module".
+COPY index.html ./
 COPY src ./src
 COPY public ./public
 
