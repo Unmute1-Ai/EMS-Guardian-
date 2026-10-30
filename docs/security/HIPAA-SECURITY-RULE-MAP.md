@@ -13,7 +13,7 @@ Run with `COMPLIANCE_MODE=hipaa`. The server refuses to start unless the safegua
 | | Emergency access procedure (R) | Break-glass accounts in the agency IdP | Agency |
 | | Automatic logoff (A) | Session lifetime is set by the IdP / proxy (recommended: 15-min idle on shared devices) | Agency IdP |
 | | Encryption/decryption (A) | No PHI stored server-side; PHI is never written to the offline cache; devices need full-disk encryption (MDM) | Argus + agency MDM |
-| (b) Audit controls | Record activity on systems with ePHI | JSON audit line per API call: time, route, status, user, IP, including denials. Bodies are never logged. | Argus; retention by log pipeline (6 yrs recommended) |
+| (b) Audit controls | Record activity on systems with ePHI | Signed, hash-chained receipt per API call: time, route, status, user, IP, including denials. Bodies are never recorded. Edits and deletions are detectable with `npm run audit:verify`. | Argus; retention by log pipeline (6 yrs recommended) |
 | (c)(1) Integrity | Protect ePHI from improper alteration | TLS in transit; no server-side ePHI store; the client can't forge AI history turns (`cleanHistory`) | Argus |
 | (d) Authentication | Verify the person is who they claim | Tokens verified against the IdP's keys: issuer, audience, expiry, asymmetric algorithms only, optional role | Argus + IdP (MFA / PIV) |
 | (e)(1) Transmission security | Guard ePHI in transit | HTTPS to the server; HTTPS to Vertex AI; HSTS; CSP | Argus + nginx TLS |

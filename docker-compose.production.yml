@@ -26,6 +26,12 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}  # demo / synthetic data only; blocked in hipaa & fedramp modes
       ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
       ELEVENLABS_BAA: ${ELEVENLABS_BAA:-}
+      # Signed, hash-chained audit thread (AU-9). Key from `npm run audit:keygen -- ./secrets`.
+      AUDIT_LOG_PATH: /var/lib/argus/audit/thread.jsonl
+      AUDIT_SIGNING_KEY_FILE: /run/secrets/audit-signing.pem
+    volumes:
+      - argus-audit:/var/lib/argus/audit
+      - ./secrets/audit-signing.pem:/run/secrets/audit-signing.pem:ro
     expose: ["3000"]                       # never published to the host; only oauth2-proxy reaches it
     read_only: true
     tmpfs: ["/tmp"]
@@ -90,3 +96,6 @@ services:
 
 networks:
   internal: {}
+
+volumes:
+  argus-audit: {}

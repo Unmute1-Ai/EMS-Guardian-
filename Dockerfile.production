@@ -51,6 +51,12 @@ COPY package*.json ./
 
 
 
+# Audit thread directory: the only writable path in the read-only container.
+# A named volume mounted here inherits this ownership on first use.
+RUN mkdir -p /var/lib/argus/audit && \
+    chown ems-guardian:nodejs /var/lib/argus/audit && \
+    chmod 700 /var/lib/argus/audit
+
 # Set security permissions
 RUN chown -R ems-guardian:nodejs /app && \
     chmod -R 755 /app/dist && \

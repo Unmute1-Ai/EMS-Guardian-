@@ -37,7 +37,9 @@ Until B1 and B3 are fully closed (IdP wired in, BAAs signed), the app must only 
 | Control | Implementation | Status |
 |---|---|---|
 | AU-2 / AU-3 Event logging & content | One JSON line per `/api` call: timestamp, method, path, status, latency, client IP, including denials. Request bodies are **never** logged (PHI). | Met: includes the user `sub` from the verified token |
-| AU-9 Protection of audit info | Logs go to stdout; retention and tamper-protection must come from the log pipeline. | Inherited |
+| AU-5 Response to audit failure | If the audit thread can't be written, `/ready` reports it and strict modes answer `/api` with 503 instead of acting unrecorded. | Met |
+| AU-9 Protection of audit info | Each receipt carries the previous receipt's hash and an Ed25519 signature; `npm run audit:verify` detects edited, deleted, reordered or re-signed lines. The file is 0600 in a dedicated volume; the signing key is mounted read-only. Tamper-**evident**, not tamper-proof: retention and WORM storage still come from the log pipeline. | Partially met (tamper evidence in-app; retention inherited) |
+| AU-10 Non-repudiation | Receipts record the verified user `sub` and are signed by a key held outside the log pipeline. | Partially met (server-signed, not user-signed) |
 | AU-12 Audit generation | Middleware runs before the origin check and rate limiter. | Met |
 
 ### Configuration Management (CM)

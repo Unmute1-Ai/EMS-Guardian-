@@ -7,7 +7,16 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import { spawnSync } from "node:child_process";
 import type { AddressInfo } from "node:net";
+import fs from "node:fs";
+import os from "node:os";
+import nodePath from "node:path";
+import { generateKeyPairSync } from "node:crypto";
 import { generateKeyPair, exportJWK, SignJWT, type KeyLike } from "jose";
+import { parseThread, verifyThread } from "./audit";
+
+const auditDir = fs.mkdtempSync(nodePath.join(os.tmpdir(), "api-audit-"));
+const auditFile = nodePath.join(auditDir, "thread.jsonl");
+const auditKeys = generateKeyPairSync("ed25519");
 
 let base = "";
 let idp: http.Server, api: http.Server;
@@ -39,6 +48,8 @@ before(async () => {
   delete process.env.AUTH_DISABLED;
   delete process.env.GEMINI_API_KEY;
   delete process.env.ELEVENLABS_API_KEY;
+  process.env.AUDIT_LOG_PATH = auditFile;
+  process.env.AUDIT_SIGNING_KEY = auditKeys.privateKey.export({ type: "pkcs8", format: "pem" }).toString();
   const { app } = await import("./index");
   api = app.listen(0);
   await new Promise((r) => api.once("listening", r));
@@ -117,4 +128,25 @@ test("offline handoff template keeps the medic's notes verbatim", async () => {
   assert.match(out, /OFFLINE DRAFT/);
   assert.match(out, /Pt 54M, CP since 0700, ASA given/);
   assert.match(out, /\*\*M - /);
+});
+
+test("malformed Origin headers are a 403, not a server error", async () => {
+  for (const origin of ["null", "not a url"]) {
+    const r = await post("/api/ai/handoff", {}, { Origin: origin, Authorization: `Bearer ${await token()}` });
+    assert.equal(r.status, 403, origin);
+  }
+});
+
+test("every API call, including denials, lands on the signed audit thread without the body", async () => {
+  const marker = "PT-NAME-JANE-DOE-DOB-1970";
+  await post("/api/ai/handoff", { input: marker });                        // 401: no token
+  await post("/api/ai/handoff", { input: marker }, { Authorization: `Bearer ${await token({ roles: [] })}` }); // 403
+  await new Promise((r) => setTimeout(r, 50)); // receipts are written on response finish
+  const text = fs.readFileSync(auditFile, "utf8");
+  assert.ok(!text.includes(marker), "request bodies must never reach the audit thread");
+  const receipts = parseThread(text);
+  assert.deepEqual(verifyThread(receipts, auditKeys.publicKey), { ok: true, count: receipts.length });
+  const statuses = receipts.filter((r) => r.evt === "api" && r.data.path === "/api/ai/handoff").map((r) => r.data.status);
+  assert.ok(statuses.includes(401) && statuses.includes(403), JSON.stringify(statuses));
+  assert.ok(receipts.some((r) => r.data.user === "medic-42"), "signed-in user is recorded");
 });
