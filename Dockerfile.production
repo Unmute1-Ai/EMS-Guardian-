@@ -1,4 +1,9 @@
-# Use multi-stage build for optimal image size
+# Use multi-stage build for optimal image size.
+# Serving mechanism: nginx static root. The final stage is nginx serving the
+# Vite build output with the repo's nginx.conf (TLS, security headers, rate
+# limits) as the single, actually-consumed serving configuration. No Node or
+# Express server runs in production — the build output is the entire
+# deployment surface.
 FROM node:18-alpine AS builder
 
 WORKDIR /app
@@ -14,59 +19,34 @@ COPY vite.config.ts ./
 # Install dependencies
 RUN npm ci
 
-# Copy source code
+# Copy source code and static marketing pages
+# (public/** — welcome/, argus/, accessguard/ — is copied verbatim into dist/)
 COPY src ./src
 COPY public ./public
 
 # Build application
 RUN npm run build
 
-# Production stage
-FROM node:18-alpine
+# Production stage — nginx static file server
+FROM nginx:1.27-alpine
 
-# Install security packages
-RUN apk add --no-cache tini curl
+# Serving config: static root + TLS + security headers + rate limits
+COPY nginx.conf /etc/nginx/nginx.conf
 
-# Create non-root user for security
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S ems-guardian -u 1001
+# App at / (dist/index.html) and marketing subpaths (/welcome/, /argus/,
+# /accessguard/) all live in the single static root
+COPY --from=builder /app/dist /usr/share/nginx/html
 
-WORKDIR /app
+EXPOSE 80 443
 
-# Copy built application from builder
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY package*.json ./
-
-# Copy certificates if available
-COPY --chown=ems-guardian:nodejs certs/ ./certs/ 2>/dev/null || 
-
-
-
-
-
-
-# Set security permissions
-RUN chown -R ems-guardian:nodejs /app && \
-    chmod -R 755 /app/dist && \
-    chmod 500 /app
-
-# Switch to non-root user
-USER ems-guardian
-
-# Health check
+# Health check: loopback-only plain-HTTP endpoint on the nginx status server
+# (no TLS cert dependency in the healthcheck itself)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3000/health || exit 1
-
-# Use tini as init process (prevents zombie processes)
-ENTRYPOINT ["/sbin/tini", "--"]
-
-# Start application
-CMD ["node", "--max-old-space-size=512", "dist/main.js"]
+    CMD wget -q -O /dev/null http://127.0.0.1:8080/health || exit 1
 
 # Metadata labels
 LABEL org.opencontainers.image.title="EMS Guardian"
-LABEL org.opencontainers.image.description="HIPAA & Mayo Clinic Standards Compliant EMS Tactical Medical Suite"
+LABEL org.opencontainers.image.description="U1 Field application and Unmute1AI product site, served statically"
 LABEL org.opencontainers.image.version="1.0.0"
-LABEL org.opencontainers.image.vendor="EMS Guardian"
-LABEL org.opencontainers.image.documentation="https://github.com/your-org/ems-guardian/blob/main/DEPLOYMENT_GUIDE.md"
+LABEL org.opencontainers.image.vendor="Unmute1ai"
+LABEL org.opencontainers.image.documentation="https://github.com/Unmute1-Ai/EMS-Guardian-/blob/main/DEPLOYMENT_GUIDE.md"
