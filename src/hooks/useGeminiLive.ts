@@ -64,7 +64,7 @@ export function useGeminiLive(customInstruction?: string, onHazardsDetected?: (h
           },
           onmessage: async (message: LiveServerMessage) => {
             if (message.serverContent?.modelTurn) {
-              const part = message.serverContent.modelTurn.parts[0];
+              const part = message.serverContent.modelTurn.parts?.[0];
               if (part?.inlineData?.data) {
                 playAudio(part.inlineData.data);
               }

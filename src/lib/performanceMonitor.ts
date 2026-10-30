@@ -118,8 +118,14 @@ export function measurePerformance(name: string) {
  */
 export class MemoryLeakDetector {
   private observers: WeakMap<object, boolean> = new WeakMap();
+  // WeakMap has no size; keep a monotonic registration counter.
+  // Over-counts after GC — intentional for leak detection (shows total ever tracked).
+  private trackedCount = 0;
 
   track(obj: object): void {
+    if (!this.observers.has(obj)) {
+      this.trackedCount++;
+    }
     this.observers.set(obj, true);
   }
 
@@ -128,7 +134,7 @@ export class MemoryLeakDetector {
     const memory = performance?.memory;
 
     return {
-      tracked: this.observers.size || 0,
+      tracked: this.trackedCount,
       approximateSize: memory ? `${(memory.usedJSHeapSize / 1048576).toFixed(2)} MB` : 'N/A'
     };
   }
