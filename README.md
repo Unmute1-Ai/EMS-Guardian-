@@ -16,12 +16,17 @@ EMS Guardian combines an accessible field interface, translation/ASL support, st
 - **AI-assisted components** behind explicit configuration boundaries.
 - **Deployment assets**: production Dockerfile, Docker Compose, Nginx config, environment templates.
 - **Security controls in code/configuration** including authentication, rate limiting, audit-oriented utilities, and secure-header configuration.
+- **Combined site**: static marketing pages in `public/` — the Unmute1ai hub at `/welcome/`, Argus Responder at `/argus/`, and U1 AccessGuard at `/accessguard/` — copied verbatim into `dist/` by the build.
 
 ## Safety boundary
 
 EMS Guardian must not be treated as an autonomous clinical authority. AI output is advisory. The application must not represent generated content as an official emergency directive, medical order, diagnosis, or authenticated dispatch message unless the relevant external authority integration has been separately implemented and verified.
 
 Do not place real PHI, credentials, secrets, or production API keys in the repository.
+
+## Combined site
+
+The built site is more than the app. `/welcome/` is the Unmute1ai platform hub, linking **Argus Responder** at `/argus/`, **U1 AccessGuard** at `/accessguard/`, and the U1 Field app at the root. The marketing pages live in `public/` and are copied verbatim into `dist/` by the build; the app itself is untouched at `/`.
 
 ## Quick start
 
@@ -63,6 +68,7 @@ See [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md).
 ## Repository map
 
 - `src/` — application code
+- `public/` — static marketing pages (hub, Argus Responder, AccessGuard) copied verbatim into `dist/`
 - `Dockerfile.production` — production container definition
 - `docker-compose.production.yml` — local/hosted production-style composition
 - `nginx.conf` — reverse-proxy configuration

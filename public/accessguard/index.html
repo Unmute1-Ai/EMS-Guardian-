@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>U1 AccessGuard — Unmute1ai</title>
+<meta name="description" content="U1 AccessGuard runs accessibility and security assessments and publishes the scores, findings, and evidence hash. A sample propel.earth assessment, shown in full.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;1,8..60,300&family=Geist:wght@400;500&family=Geist+Mono:wght@400&family=Barlow+Condensed:wght@600;700&display=swap">
+<style>
+/* Layout: what AccessGuard is, then a full sample report. Same editorial column as the platform — stone-green field, hi-vis accents, mono for anything the engine wrote. */
+:root {
+  --bg: #f3f4f1;
+  --surface: #fbfbf9;
+  --ink: #14211c;
+  --muted: #5d6a64;
+  --line: #dde2dd;
+  --glow: #3b6fd8;
+  --serif: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+  --sans: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Geist Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --stencil: "Barlow Condensed", "Arial Narrow", sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #0f1613; --surface: #141d19; --ink: #e9eeea; --muted: #94a19a; --line: #24302b; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #0f1613; --surface: #141d19; --ink: #e9eeea; --muted: #94a19a; --line: #24302b; color-scheme: dark; }
+:root { --hivis: #e8590c; --med: #d98a0b; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --hivis: #ff7a2e; --med: #e8a83a; } }
+:root[data-theme="dark"] { --hivis: #ff7a2e; --med: #e8a83a; }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.65 var(--sans); -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--serif); font-weight: 300; margin: 0; text-wrap: balance; letter-spacing: -.015em; }
+p { margin: 0; max-width: 60ch; }
+.label { font: 700 13px/1 var(--stencil); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--glow); outline-offset: 3px; border-radius: 4px; }
+
+/* Nav */
+nav { padding-block: 22px; }
+nav .wrap { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.mark { font: 700 24px/1 var(--stencil); letter-spacing: .06em; text-transform: uppercase; }
+.mark span { color: var(--hivis); }
+.nav-links { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.nav-link { font-size: 15px; color: var(--muted); text-decoration: none; }
+.nav-link:hover { color: var(--ink); }
+.nav-link[aria-current="page"] { color: var(--ink); }
+
+/* Hero */
+.hero { padding-block: clamp(56px, 10vw, 120px) clamp(48px, 7vw, 88px); }
+.hero h1 { font-size: clamp(44px, 7.6vw, 96px); line-height: .98; max-width: 16ch; }
+.hero h1 em { font-style: italic; color: var(--hivis); }
+.hero .lede { font-size: clamp(18px, 2vw, 21px); color: var(--muted); margin-top: 28px; max-width: 54ch; }
+.chevrons { height: 10px; background: repeating-linear-gradient(-45deg, var(--hivis) 0 12px, transparent 12px 24px); }
+
+/* Sections */
+section { padding-block: clamp(56px, 8vw, 96px); border-top: 1px solid var(--line); }
+.sec-intro { display: grid; grid-template-columns: 1fr 1.4fr; gap: 40px; align-items: end; margin-bottom: 40px; }
+.sec-intro h2 { font-size: clamp(36px, 5vw, 60px); line-height: 1.02; }
+.sec-intro p { color: var(--muted); }
+
+/* Method grid */
+.trust { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 2px solid var(--line); border-radius: 4px; overflow: hidden; }
+.trust > div { background: var(--surface); padding: 26px; display: grid; gap: 10px; align-content: start; }
+.trust h3 { font-size: 24px; line-height: 1.15; }
+.trust p { color: var(--muted); font-size: 15px; }
+
+/* Report */
+.report { border: 2px solid var(--line); border-radius: 4px; overflow: hidden; }
+.report-head { background: var(--surface); padding: clamp(24px, 3.4vw, 40px); border-bottom: 1px solid var(--line); display: grid; gap: 18px; }
+.report-head h3 { font-size: clamp(26px, 3.2vw, 40px); line-height: 1.08; }
+.meta { font-family: var(--mono); font-size: 13.5px; color: var(--muted); display: grid; gap: 6px; }
+.meta strong { color: var(--ink); font-weight: 400; }
+
+.scores { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border-bottom: 1px solid var(--line); }
+.score { background: var(--surface); padding: clamp(24px, 3vw, 36px); display: grid; gap: 8px; align-content: start; }
+.score .num { font: 300 clamp(44px, 6vw, 72px)/1 var(--serif); letter-spacing: -.02em; }
+.score .num span { color: var(--muted); font-size: .45em; }
+.score .num.sec { color: var(--hivis); }
+.score .num.acc { color: #2f8a5b; }
+.score figcaption { color: var(--muted); font-size: 14px; }
+.score-note { background: var(--surface); padding: 18px clamp(24px, 3vw, 36px); font-family: var(--mono); font-size: 13px; color: var(--muted); }
+
+table { width: 100%; border-collapse: collapse; background: var(--surface); }
+th { font: 700 13px/1 var(--stencil); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); text-align: left; padding: 16px 22px; border-bottom: 2px solid var(--ink); }
+td { padding: 20px 22px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 15.5px; }
+tr:last-child td { border-bottom: 0; }
+td .f-title { font-family: var(--serif); font-size: 18px; line-height: 1.3; display: block; margin-bottom: 6px; }
+td .f-desc { color: var(--muted); font-size: 14.5px; display: block; margin-top: 6px; }
+td .f-area { font-family: var(--mono); font-size: 12px; color: var(--muted); letter-spacing: .04em; display: block; margin-top: 8px; }
+.sev { font: 700 13px/1 var(--stencil); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
+.sev i { font-style: normal; display: inline-block; padding: 6px 10px; border: 2px solid; border-radius: 2px; }
+.sev.medium i { color: var(--med); border-color: var(--med); }
+.sev.low i { color: var(--muted); border-color: var(--line); }
+.sev.info i { color: var(--glow); border-color: var(--glow); }
+.status { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.status.verified { color: var(--med); }
+
+.evidence { border-top: 2px solid var(--ink); background: var(--surface); padding: clamp(24px, 3vw, 36px); display: grid; gap: 14px; }
+.evidence .hash { font-family: var(--mono); font-size: 13px; color: var(--ink); word-break: break-all; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px; }
+.evidence p { font-size: 14.5px; color: var(--muted); }
+.evidence blockquote { margin: 0; padding: 12px 16px; border-left: 3px solid var(--line); color: var(--muted); font-size: 14.5px; }
+.btn { display: inline-flex; align-items: center; gap: 10px; padding: 13px 20px; border-radius: 2px; font: 500 16px/1 var(--stencil); letter-spacing: .1em; text-transform: uppercase; text-decoration: none; border: 2px solid var(--line); background: var(--surface); color: var(--ink); transition: border-color .3s; justify-self: start; }
+.btn:hover { border-color: var(--ink); }
+.btn.solid { background: var(--hivis); border-color: var(--hivis); color: #fff; }
+.btn .arr { transition: transform .3s; }
+.btn:hover .arr { transform: translateX(3px); }
+
+/* Disclaimer */
+.disclaimer { border: 2px solid var(--line); border-radius: 4px; background: var(--surface); padding: clamp(24px, 3.4vw, 40px); display: grid; gap: 14px; }
+.disclaimer p { font-size: 15.5px; color: var(--muted); max-width: 72ch; }
+
+.note { color: var(--muted); font-size: 15px; max-width: 72ch; margin-top: 28px; }
+.note strong { color: var(--ink); font-weight: 500; }
+
+footer { padding-block: 40px 56px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
+
+@media (max-width: 860px) {
+  .sec-intro, .trust, .scores { grid-template-columns: 1fr; }
+  th, td { padding-left: 16px; padding-right: 16px; }
+  .table-scroll { overflow-x: auto; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <span class="mark">U1 <span>AccessGuard</span></span>
+    <span class="nav-links">
+      <a class="nav-link" href="../welcome/">Hub</a>
+      <a class="nav-link" href="../argus/">Argus Responder</a>
+      <a class="nav-link" href="./" aria-current="page">U1 AccessGuard</a>
+      <a class="nav-link" href="/">Launch app</a>
+      <a class="nav-link" href="https://github.com/Unmute1-Ai/EMS-Guardian-" target="_blank" rel="noopener">GitHub ↗</a>
+    </span>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="label">An Unmute1ai project</span>
+    <h1 style="margin-top:22px">Scores you can <em>audit.</em></h1>
+    <p class="lede">U1 AccessGuard assesses websites for accessibility and security, then publishes the receipts: what ran, what it found, and the hash of the evidence. Below is a full sample, exactly as the engine produced it.</p>
+  </div>
+</header>
+<div class="chevrons" aria-hidden="true"></div>
+
+<section style="border-top:0">
+  <div class="wrap">
+    <div class="sec-intro">
+      <h2>What AccessGuard does.</h2>
+      <p>An assessment is automated checks plus an honest accounting of what automation can't see. Three things it always does.</p>
+    </div>
+    <div class="trust">
+      <div><span class="label">Method</span><h3>Passive checks only</h3><p>Passive security-header observations and axe-core automated checks. No exploitation, no load testing, no access attempts.</p></div>
+      <div><span class="label">Limits</span><h3>Says what it can't see</h3><p>Scores are a triage aid computed from automated findings, not a certification. Anything automation can't judge is flagged for manual verification instead of scored as a failure.</p></div>
+      <div><span class="label">Evidence</span><h3>Hashed, on every report</h3><p>Every report carries its authorization statement and a SHA-256 evidence hash, so the published result is the result that ran.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-intro">
+      <h2>A sample, in full.</h2>
+      <p>A real assessment of propel.earth, reproduced here with every number, finding, and hash it shipped with. The full PDF is attached below.</p>
+    </div>
+
+    <div class="report">
+      <div class="report-head">
+        <span class="label">Sample assessment</span>
+        <h3>U1 AccessGuard Accessibility + Security Assessment · Unmute1AI, Inc.</h3>
+        <div class="meta">
+          <span><strong>Site:</strong> https://propel.earth/</span>
+          <span><strong>Assessed:</strong> Mon, 26 Oct 2026 20:13:54 GMT</span>
+          <span><strong>Assessment ID:</strong> a6e72d0e-bf42-47b1-8a6b-6729871c9c7d</span>
+          <span><strong>Pages scanned:</strong> 3 (https://propel.earth/ and two marketplace/asks pages)</span>
+        </div>
+      </div>
+
+      <div class="scores">
+        <figure class="score" style="margin:0">
+          <div class="num sec">92<span>/100</span></div>
+          <figcaption>Security score</figcaption>
+        </figure>
+        <figure class="score" style="margin:0">
+          <div class="num acc">100<span>/100</span></div>
+          <figcaption>Accessibility score</figcaption>
+        </figure>
+      </div>
+      <div class="score-note">Findings: 3 total - 0 critical, 0 high, 1 medium, 0 low, 1 informational; 1 need manual verification.</div>
+
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th scope="col">Severity</th><th scope="col">Finding</th><th scope="col">Status</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="sev medium"><i>Medium</i></span></td>
+              <td>
+                <span class="f-title">Content-Security-Policy allows unsafe inline/eval scripts</span>
+                A CSP is present but permits 'unsafe-inline' or 'unsafe-eval' for scripts without nonces or hashes, which removes most of its protection against injected scripts.
+                <span class="f-area">Security · Security headers &amp; transport (OWASP / Mozilla Observatory practice) · rule: csp-weak</span>
+              </td>
+              <td><span class="status">Automated finding</span></td>
+            </tr>
+            <tr>
+              <td><span class="sev low"><i>Low</i></span></td>
+              <td>
+                <span class="f-title">Elements must meet minimum color contrast ratio thresholds</span>
+                Automated testing could not determine whether this passes or fails, so it is recorded for human review rather than scored as a failure.
+                <span class="f-area">Accessibility · WCAG 1.4.3 (Level AA) · rule: color-contrast</span>
+              </td>
+              <td><span class="status verified">Needs manual verification</span></td>
+            </tr>
+            <tr>
+              <td><span class="sev info"><i>Info</i></span></td>
+              <td>
+                <span class="f-title">Server technology disclosed in response headers</span>
+                Responses advertise server technology (Server: Fly/331937a822 (2026-10-23)), giving attackers a head start on matching known vulnerabilities to exact versions.
+                <span class="f-area">Security · Security headers &amp; transport (OWASP / Mozilla Observatory practice) · rule: version-disclosure</span>
+              </td>
+              <td><span class="status">Automated observation</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="evidence">
+        <span class="label">Authorization &amp; evidence</span>
+        <p>Authorization confirmed by the site owner or their authorized agent at 2026-10-26T20:13:54.929Z:</p>
+        <blockquote>“I confirm that I own this website or hold written authorization from its owner to assess it, and I understand this assessment uses passive observation and automated checks only - no exploitation, no load testing, no access attempts.”</blockquote>
+        <span class="label">Evidence integrity hash (SHA-256)</span>
+        <div class="hash">a79fb532f55d6606f324ced3151a15a9310f4f05c34a8ac51098241681c77a9f</div>
+        <p>Engine: accessguard-engine/1.0 (passive headers + axe-core 4.14)</p>
+        <a class="btn solid" href="propel-earth-assessment.pdf" download>Download the full report (PDF) <span class="arr">→</span></a>
+      </div>
+    </div>
+
+    <div class="disclaimer" style="margin-top:32px">
+      <span class="label">What this assessment does not claim</span>
+      <p>Automated checks cover a portion of the WCAG standard and a defined set of passive security observations. A clean automated result is not full WCAG conformance and not a guarantee of security; items marked "needs manual verification" require a human reviewer. No active exploitation, load testing, or access attempts were performed. Remediation, where purchased, is an explicit scope of work described in the service terms - it is not a promise that a site becomes "100% secure" or "fully accessible."</p>
+    </div>
+
+    <p class="note"><strong>Status:</strong> U1 AccessGuard is an Unmute1ai product in development. This page reproduces one sample report; it adds no claims beyond the report itself.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>U1 AccessGuard · An Unmute1ai project</span>
+    <a class="nav-link" href="https://github.com/Unmute1-Ai/EMS-Guardian-" target="_blank" rel="noopener">github.com/Unmute1-Ai/EMS-Guardian- ↗</a>
+    <span>Trust you can check.</span>
+  </div>
+</footer>
+
+</body>
+</html>
