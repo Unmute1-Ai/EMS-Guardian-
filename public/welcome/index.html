@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Unmute1ai — Argus Responder · U1 AccessGuard · U1 Field</title>
+<meta name="description" content="Unmute1ai builds tools for the moments systems weren't designed for: a responder's voice for patients who can't speak, assessments that publish their evidence, and the U1 Field app for emergency-services workflows.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;1,8..60,300&family=Geist:wght@400;500&family=Geist+Mono:wght@400&family=Barlow+Condensed:wght@600;700&display=swap">
+<style>
+/* Layout: the Unmute1ai platform page. Same editorial column as the product pages — big quiet serif statements, stone-green field, one hi-vis accent. */
+:root {
+  --bg: #f3f4f1;          /* pale stone, faint green bias */
+  --surface: #fbfbf9;
+  --ink: #14211c;         /* deep green-ink */
+  --muted: #5d6a64;
+  --line: #dde2dd;
+  --glow: #3b6fd8;
+  --serif: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+  --sans: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --stencil: "Barlow Condensed", "Arial Narrow", sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #0f1613; --surface: #141d19; --ink: #e9eeea; --muted: #94a19a; --line: #24302b; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #0f1613; --surface: #141d19; --ink: #e9eeea; --muted: #94a19a; --line: #24302b; color-scheme: dark; }
+:root { --hivis: #e8590c; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --hivis: #ff7a2e; } }
+:root[data-theme="dark"] { --hivis: #ff7a2e; }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.65 var(--sans); -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--serif); font-weight: 300; margin: 0; text-wrap: balance; letter-spacing: -.015em; }
+p { margin: 0; max-width: 60ch; }
+.label { font: 700 13px/1 var(--stencil); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--glow); outline-offset: 3px; border-radius: 4px; }
+
+/* Nav */
+nav { padding-block: 22px; }
+nav .wrap { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.mark { font: 700 24px/1 var(--stencil); letter-spacing: .06em; text-transform: uppercase; }
+.mark span { color: var(--hivis); }
+.nav-links { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.nav-link { font-size: 15px; color: var(--muted); text-decoration: none; }
+.nav-link:hover { color: var(--ink); }
+.nav-link[aria-current="page"] { color: var(--ink); }
+
+/* Hero */
+.hero { padding-block: clamp(56px, 10vw, 120px) clamp(48px, 7vw, 88px); }
+.hero h1 { font-size: clamp(48px, 8.4vw, 104px); line-height: .98; max-width: 16ch; }
+.hero h1 em { font-style: italic; color: var(--hivis); }
+.hero .lede { font-size: clamp(18px, 2vw, 21px); color: var(--muted); margin-top: 28px; max-width: 52ch; }
+.chevrons { height: 10px; background: repeating-linear-gradient(-45deg, var(--hivis) 0 12px, transparent 12px 24px); }
+
+/* Sections */
+section { padding-block: clamp(56px, 8vw, 96px); border-top: 1px solid var(--line); }
+.sec-intro { display: grid; grid-template-columns: 1fr 1.4fr; gap: 40px; align-items: end; margin-bottom: 40px; }
+.sec-intro h2 { font-size: clamp(36px, 5vw, 60px); line-height: 1.02; }
+.sec-intro p { color: var(--muted); }
+
+/* Products: two symmetric cards — equal prominence, neither a subsection of the other */
+.products { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 2px solid var(--line); border-radius: 4px; overflow: hidden; }
+.product { background: var(--surface); padding: clamp(28px, 4vw, 44px); display: grid; gap: 18px; align-content: start; }
+.product h3 { font-size: clamp(30px, 3.6vw, 46px); line-height: 1.05; }
+.product p { color: var(--muted); font-size: 16px; }
+.product .btn { justify-self: start; margin-top: 8px; }
+
+/* Buttons */
+.btn { display: inline-flex; align-items: center; gap: 10px; padding: 13px 20px; border-radius: 2px; font: 500 16px/1 var(--stencil); letter-spacing: .1em; text-transform: uppercase; text-decoration: none; border: 2px solid var(--line); background: var(--surface); color: var(--ink); transition: border-color .3s; }
+.btn:hover { border-color: var(--ink); }
+.btn.solid { background: var(--hivis); border-color: var(--hivis); color: #fff; }
+.btn .arr { transition: transform .3s; }
+.btn:hover .arr { transform: translateX(3px); }
+
+/* Quiet app row: the field tool gets a sentence, not a card */
+.app-row { display: grid; grid-template-columns: 1fr 1.6fr; gap: 24px; align-items: center; }
+.app-row p { color: var(--muted); }
+.app-link { color: var(--ink); text-decoration-color: var(--hivis); text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.app-link:hover { color: var(--hivis); }
+.note { color: var(--muted); font-size: 15px; max-width: 72ch; }
+.note strong { color: var(--ink); font-weight: 500; }
+
+footer { padding-block: 40px 56px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
+
+@media (max-width: 860px) {
+  .sec-intro, .products, .app-row { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <span class="mark">Unmute1<span>ai</span></span>
+    <span class="nav-links">
+      <a class="nav-link" href="./" aria-current="page">Hub</a>
+      <a class="nav-link" href="../argus/">Argus Responder</a>
+      <a class="nav-link" href="../accessguard/">U1 AccessGuard</a>
+      <a class="nav-link" href="/">Launch app</a>
+      <a class="nav-link" href="https://github.com/Unmute1-Ai/EMS-Guardian-" target="_blank" rel="noopener">GitHub ↗</a>
+    </span>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="label">An Unmute1ai project</span>
+    <h1 style="margin-top:22px">Every voice heard.<br>Every claim <em>checked.</em></h1>
+    <p class="lede">Unmute1ai builds tools for the moments systems weren't designed for — a responder's voice for patients who can't speak, and assessments that publish their evidence instead of asking for trust.</p>
+  </div>
+</header>
+<div class="chevrons" aria-hidden="true"></div>
+
+<section style="border-top:0">
+  <div class="wrap">
+    <div class="sec-intro">
+      <h2>What we make.</h2>
+      <p>Two products, each with its own page and its own job — neither is a subsection of the other. Pick a door.</p>
+    </div>
+    <div class="products">
+      <div class="product">
+        <span class="label">Field communication</span>
+        <h3>Argus Responder</h3>
+        <p>A voice for patients who sign, speak another language, or can't speak at all. Argus reads ASL, translates in real time, and drafts the handoff — even with no signal.</p>
+        <a class="btn solid" href="../argus/">Explore Argus Responder <span class="arr">→</span></a>
+      </div>
+      <div class="product">
+        <span class="label">Assessments</span>
+        <h3>U1 AccessGuard</h3>
+        <p>Accessibility and security assessments that show their work: scores, findings, the engine that ran, and a SHA-256 hash of the evidence behind the result.</p>
+        <a class="btn solid" href="../accessguard/">Explore U1 AccessGuard <span class="arr">→</span></a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap app-row">
+    <span class="label">The field tool</span>
+    <p>U1 Field, the offline-first field interface this repository ships, lives at the root of this site. <a class="app-link" href="/">Launch U1 Field →</a></p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="note"><strong>Status:</strong> Unmute1ai projects are in development. Nothing on this site is a certified medical device, and no assessment shown here is a security or accessibility certification. Each product's page carries its own limits.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>An Unmute1ai project</span>
+    <a class="nav-link" href="https://github.com/Unmute1-Ai/EMS-Guardian-" target="_blank" rel="noopener">github.com/Unmute1-Ai/EMS-Guardian- ↗</a>
+    <span>Accessibility first. Authority by design.</span>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,349 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Argus Responder</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;1,8..60,300&family=Geist:wght@400;500&family=Geist+Mono:wght@400&family=Barlow+Condensed:wght@600;700&display=swap">
+<style>
+/* Layout: a calm editorial column. Big quiet serif statements, wide margins, one living console where color happens. */
+:root {
+  --bg: #f3f4f1;          /* pale stone, faint green bias */
+  --surface: #fbfbf9;
+  --ink: #14211c;         /* deep green-ink */
+  --muted: #5d6a64;
+  --line: #dde2dd;
+  --glow: #3b6fd8;
+  --serif: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+  --sans: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Geist Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #0f1613; --surface: #141d19; --ink: #e9eeea; --muted: #94a19a; --line: #24302b; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #0f1613; --surface: #141d19; --ink: #e9eeea; --muted: #94a19a; --line: #24302b; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 17px/1.65 var(--sans); -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--serif); font-weight: 300; margin: 0; text-wrap: balance; letter-spacing: -.015em; }
+p { margin: 0; max-width: 60ch; }
+.label { font: 400 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--glow); outline-offset: 3px; border-radius: 4px; }
+
+/* Nav */
+nav { padding-block: 22px; }
+nav .wrap { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.mark { font: 400 22px/1 var(--serif); letter-spacing: -.01em; }
+.mark span { color: var(--muted); }
+.nav-link { font-size: 15px; color: var(--muted); text-decoration: none; }
+.nav-link:hover { color: var(--ink); }
+.nav-links { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.nav-link[aria-current="page"] { color: var(--ink); }
+
+/* Hero */
+.hero { padding-block: clamp(56px, 10vw, 120px) clamp(48px, 7vw, 88px); }
+.hero h1 { font-size: clamp(48px, 8.4vw, 104px); line-height: .98; max-width: 14ch; }
+.hero h1 em { font-style: italic; color: var(--glow); transition: color .6s; }
+.hero .lede { font-size: clamp(18px, 2vw, 21px); color: var(--muted); margin-top: 28px; max-width: 46ch; }
+.cta-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 36px; }
+.btn { display: inline-flex; align-items: center; gap: 10px; padding: 13px 22px; border-radius: 999px; font: 500 15px/1 var(--sans); text-decoration: none; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; transition: border-color .3s, box-shadow .3s; }
+.btn:hover { border-color: var(--ink); }
+.btn.solid { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.btn .arr { transition: transform .3s; }
+.btn:hover .arr { transform: translateX(3px); }
+.agencies { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 56px; }
+
+/* Sections */
+section { padding-block: clamp(64px, 9vw, 112px); border-top: 1px solid var(--line); }
+.sec-intro { display: grid; grid-template-columns: 1fr 1.4fr; gap: 40px; align-items: end; margin-bottom: 40px; }
+.sec-intro h2 { font-size: clamp(36px, 5vw, 60px); line-height: 1.02; }
+.sec-intro p { color: var(--muted); }
+
+/* Console: each tab sets --glow on <body>; the console, headline and accents follow */
+.console { position: relative; border-radius: 22px; background: var(--surface); border: 1px solid var(--line); overflow: hidden; transition: box-shadow .6s; box-shadow: 0 40px 120px -50px color-mix(in srgb, var(--glow) 70%, transparent); }
+.console::before { content: ""; position: absolute; inset: -40% -10% auto; height: 80%; background: radial-gradient(closest-side, color-mix(in srgb, var(--glow) 16%, transparent), transparent); pointer-events: none; transition: background .6s; }
+.tabs { position: relative; display: flex; gap: 6px; padding: 14px; overflow-x: auto; border-bottom: 1px solid var(--line); }
+.tab { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 999px; border: 1px solid transparent; background: none; color: var(--muted); font: 500 14px/1 var(--sans); cursor: pointer; transition: color .3s, background .3s, border-color .3s; }
+.tab i { width: 7px; height: 7px; border-radius: 50%; background: var(--tc); opacity: .55; transition: opacity .3s, box-shadow .3s; }
+.tab:hover { color: var(--ink); }
+.tab[aria-selected="true"] { color: var(--ink); background: color-mix(in srgb, var(--tc) 10%, var(--surface)); border-color: color-mix(in srgb, var(--tc) 35%, transparent); }
+.tab[aria-selected="true"] i { opacity: 1; box-shadow: 0 0 0 4px color-mix(in srgb, var(--tc) 22%, transparent), 0 0 14px var(--tc); }
+.panel { position: relative; display: grid; grid-template-columns: 1.05fr .95fr; }
+.panel > * { min-width: 0; }
+.screen { padding: 28px; border-right: 1px solid var(--line); }
+.screen-head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.screen-head .label { color: var(--ink); }
+.pulse { display: inline-flex; align-items: center; gap: 8px; font: 400 12px/1 var(--mono); color: var(--muted); letter-spacing: .08em; }
+.pulse::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--glow); box-shadow: 0 0 10px var(--glow); }
+.rows { display: grid; gap: 2px; font-family: var(--mono); font-size: 13.5px; }
+.row { display: grid; grid-template-columns: 82px 1fr; gap: 14px; padding: 11px 0; border-bottom: 1px dashed var(--line); animation: rise .45s both; }
+.row:last-child { border-bottom: 0; }
+.row .k { color: var(--muted); letter-spacing: .06em; }
+.row strong { font-weight: 400; color: var(--glow); }
+.meter { height: 4px; border-radius: 4px; background: var(--line); margin-top: 8px; overflow: hidden; }
+.meter i { display: block; height: 100%; border-radius: 4px; background: var(--glow); }
+.why { padding: 28px; display: grid; gap: 18px; align-content: start; }
+.why h3 { font-size: clamp(28px, 3vw, 38px); line-height: 1.08; }
+.why ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 14px; }
+.why li { display: grid; grid-template-columns: 18px 1fr; gap: 12px; font-size: 16px; }
+.why li::before { content: ""; width: 6px; height: 6px; margin-top: 10px; border-radius: 50%; background: var(--glow); }
+.who-for { color: var(--muted); font-size: 15px; border-top: 1px solid var(--line); padding-top: 16px; }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* Offline */
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(32px, 6vw, 80px); align-items: start; }
+.split > * { min-width: 0; }
+.quote { font: 300 clamp(34px, 4.6vw, 56px)/1.05 var(--serif); letter-spacing: -.015em; }
+.quote em { font-style: italic; color: var(--muted); }
+.stack { display: grid; gap: 20px; }
+.states { display: grid; gap: 0; border-top: 1px solid var(--line); }
+.state { display: flex; justify-content: space-between; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--line); transition: opacity .5s; }
+.state .tag { font: 400 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: #2f8a5b; padding-top: 5px; white-space: nowrap; }
+.state.net .tag { color: var(--muted); }
+body.no-signal .state.net { opacity: .35; }
+body.no-signal .state:not(.net) .tag { text-shadow: 0 0 12px currentColor; }
+.signal { font: 400 13px/1.4 var(--mono); color: var(--muted); }
+body.no-signal .signal { color: var(--ink); }
+body.no-signal #offline { background: color-mix(in srgb, var(--ink) 4%, var(--bg)); }
+#offline { transition: background .6s; }
+
+/* Trust */
+.trust { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+.trust > div { background: var(--surface); padding: 26px; display: grid; gap: 10px; align-content: start; }
+.trust h3 { font-size: 24px; line-height: 1.15; }
+.trust p { color: var(--muted); font-size: 15px; }
+.note { margin-top: 28px; color: var(--muted); font-size: 15px; max-width: 72ch; }
+
+footer { padding-block: 40px 56px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
+
+@media (max-width: 860px) {
+  .sec-intro, .split, .panel, .trust { grid-template-columns: 1fr; }
+  .screen { border-right: 0; border-bottom: 1px solid var(--line); }
+}
+@media (prefers-reduced-motion: reduce) { .row { animation: none; } * { transition: none !important; } }
+
+/* Rugged layer: calm layout, field-equipment details */
+:root { --hivis: #e8590c; --stencil: "Barlow Condensed", "Arial Narrow", sans-serif; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --hivis: #ff7a2e; } }
+:root[data-theme="dark"] { --hivis: #ff7a2e; }
+.label, .tab, .btn, .mark, .pulse, .state .tag, .signal { font-family: var(--stencil); font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.label { font-size: 13px; }
+.mark { font-size: 24px; letter-spacing: .06em; }
+.mark span { color: var(--hivis); }
+.btn { border-radius: 2px; font-size: 16px; padding: 13px 20px; border-width: 2px; }
+.btn.solid { background: var(--hivis); border-color: var(--hivis); color: #fff; }
+.tab { border-radius: 2px; font-size: 15px; }
+.console, .trust { border-radius: 4px; border-width: 2px; }
+.console { box-shadow: 0 0 0 1px color-mix(in srgb, var(--glow) 30%, transparent), 0 40px 110px -55px color-mix(in srgb, var(--glow) 75%, transparent); }
+.hero h1 em { color: var(--hivis); }
+.screen-head { padding-bottom: 12px; border-bottom: 2px solid var(--ink); }
+.chevrons { height: 10px; background: repeating-linear-gradient(-45deg, var(--hivis) 0 12px, transparent 12px 24px); }
+.agencies .label { padding: 6px 10px; border: 2px solid var(--line); }
+.state .tag { font-size: 14px; }
+
+/* "Every responder heard" drifts in after the first line, and leads to its own page */
+.heard { display: inline-block; text-decoration: none; color: inherit; }
+.heard em { color: #7c8fd6; }
+.heard:hover em { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 8px; }
+@media (prefers-reduced-motion: no-preference) {
+  .heard { animation: drift 2.4s cubic-bezier(.2,.7,.2,1) 1.1s both; }
+  @keyframes drift { from { opacity: .12; filter: blur(6px); transform: translateY(14px); } to { opacity: 1; filter: none; transform: none; } }
+}
+.responder-band { background: linear-gradient(160deg, #e9ecf7, #f4ece6); color: #1f2440; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .responder-band { background: linear-gradient(160deg, #171b2e, #241c22); color: #e6e8f3; } }
+:root[data-theme="dark"] .responder-band { background: linear-gradient(160deg, #171b2e, #241c22); color: #e6e8f3; }
+.responder-band .label { color: inherit; opacity: .7; }
+.responder-band p { opacity: .8; }
+</style>
+
+<nav>
+  <div class="wrap">
+    <span class="mark">Argus <span>Responder</span></span>
+    <span class="nav-links">
+      <a class="nav-link" href="../welcome/">Hub</a>
+      <a class="nav-link" href="index.html" aria-current="page">Argus Responder</a>
+      <a class="nav-link" href="../accessguard/">U1 AccessGuard</a>
+      <a class="nav-link" href="/">Launch app</a>
+      <a class="nav-link" href="https://github.com/Unmute1-Ai/EMS-Guardian-" target="_blank" rel="noopener">GitHub ↗</a>
+    </span>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="label">An Unmute1ai project</span>
+    <h1 style="margin-top:22px;max-width:16ch">Every patient <em>understood.</em><br><a class="heard" href="responders.html">Every responder <em>heard.</em></a></h1>
+    <p class="lede">Argus gives first responders a voice for patients who sign, speak another language, or can't speak at all. It reads ASL, translates in real time, and drafts the handoff, even with no signal.</p>
+    <div class="cta-row">
+      <a class="btn solid" href="#console">See it work <span class="arr">→</span></a>
+      <a class="btn" href="#offline">Built for no signal</a>
+    </div>
+    <div class="agencies">
+      <span class="label">EMS</span><span class="label">Fire</span><span class="label">Police</span>
+    </div>
+  </div>
+</header>
+<div class="chevrons" aria-hidden="true"></div>
+
+<section id="console" style="border-top:0">
+  <div class="wrap">
+    <div class="sec-intro">
+      <h2>One screen.<br>Six ways to help.</h2>
+      <p>Each tab is a tool the crew can reach in a second. Choose one to see what it shows on a call and why it matters.</p>
+    </div>
+    <div class="console">
+      <div class="tabs" role="tablist" aria-label="Argus tools" id="tabs"></div>
+      <div class="panel" role="tabpanel" id="panel">
+        <div class="screen">
+          <div class="screen-head"><span class="label" id="p-title"></span><span class="pulse" id="p-status"></span></div>
+          <div class="rows" id="p-screen"></div>
+        </div>
+        <div class="why">
+          <span class="label">Why it helps</span>
+          <h3 id="p-head"></h3>
+          <ul id="p-reasons"></ul>
+          <p class="who-for" id="p-who"></p>
+        </div>
+      </div>
+    </div>
+    <p class="note">Example screens with made-up patient data.</p>
+  </div>
+</section>
+
+<section id="offline">
+  <div class="wrap split">
+    <div class="stack">
+      <span class="label">Disconnected operations</span>
+      <p class="quote">Basements. Rural roads. Disaster zones. <em>The signal drops; Argus doesn't.</em></p>
+      <p style="color:var(--muted)">After one online load, the app and its hand-tracking engine are stored on the device. When the network goes, voice and reporting switch to on-device fallbacks. Patient data is never stored in the offline cache.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center">
+        <button class="btn" id="cut" type="button" aria-pressed="false">Cut the signal</button>
+        <span class="signal" id="signal-state" aria-live="polite">Signal · 4 bars LTE</span>
+      </div>
+    </div>
+    <div class="states">
+      <div class="state"><span>App loads</span><span class="tag">On device</span></div>
+      <div class="state"><span>ASL hand tracking</span><span class="tag">On device</span></div>
+      <div class="state"><span>Spoken alerts</span><span class="tag">Device voice</span></div>
+      <div class="state"><span>MIST handoff</span><span class="tag">Template</span></div>
+      <div class="state net"><span>AI translation and scenarios</span><span class="tag">Needs network</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="responder-band">
+  <div class="wrap sec-intro" style="margin-bottom:0">
+    <div style="display:grid;gap:16px">
+      <span class="label">For the crew</span>
+      <h2>Every responder heard.</h2>
+    </div>
+    <div style="display:grid;gap:22px;justify-items:start">
+      <p>The calls stay with you. Argus gives the people who answer them a quiet place to breathe, and U1Voice, a voice that listens after the hard ones.</p>
+      <a class="btn" href="responders.html">Take a breath <span class="arr">→</span></a>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-intro">
+      <h2>Trust you can check.</h2>
+      <p>The security work is in the repository, gaps included, so agencies can review it instead of taking our word for it.</p>
+    </div>
+    <div class="trust">
+      <div><span class="label">Keys</span><h3>Nothing secret in the browser</h3><p>AI keys stay on the server. Live sessions get short, single-use tokens.</p></div>
+      <div><span class="label">Builds</span><h3>Scanned on every change</h3><p>Code scanning, secret scanning, a dependency audit and a package inventory on each build.</p></div>
+      <div><span class="label">NIST</span><h3>Mapped, openly</h3><p>Controls mapped to NIST SP 800-53 and SP 800-218, with what is still open.</p></div>
+    </div>
+    <p class="note"><strong style="color:var(--ink);font-weight:500">Status:</strong> Argus is in development. It is not a certified medical device and is not certified for HIPAA, FedRAMP or government use. AI output is advisory. Pilots use made-up patient data only.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>Argus Responder · An Unmute1ai project</span>
+    <a class="nav-link" href="https://github.com/Unmute1-Ai/EMS-Guardian-" target="_blank" rel="noopener">github.com/Unmute1-Ai/EMS-Guardian- ↗</a>
+    <span>Accessibility first. Privacy first.</span>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const TABS = [
+    { id: 'ASL', name: 'Sign', color: '#3b6fd8', title: 'ASL · Camera 1', status: 'Hands tracked',
+      screen: [['GLOSS', 'PAIN · CHEST · MORNING'], ['ENGLISH', '<strong>"My chest has hurt since this morning."</strong>'], ['CONF', '86%<div class="meter"><i style="width:86%"></i></div>'], ['MODE', 'On device · works offline']],
+      head: 'Deaf patients answer for themselves.',
+      reasons: ['Reads ASL from the camera and shows plain English to the crew', 'No waiting for an interpreter in the first critical minutes', 'Runs on the device, so it keeps working with no signal'],
+      who: 'For Deaf and hard-of-hearing patients, and nonverbal patients who sign.' },
+    { id: 'TRN', name: 'Translate', color: '#8b5cf6', title: 'Translate · Live', status: 'Spanish ⇄ English',
+      screen: [['PATIENT', 'Soy alérgica a la penicilina.'], ['CREW', '<strong>"I\'m allergic to penicillin."</strong>'], ['CREW', 'Where does it hurt?'], ['PATIENT', '<strong>¿Dónde le duele?</strong>']],
+      head: 'No language barrier at the bedside.',
+      reasons: ['Translates both ways in real time, with no app-switching', 'Catches allergies and medications the crew might otherwise miss', 'Hands-free: it listens, so the medic keeps working'],
+      who: 'For patients and bystanders who don\'t speak English.' },
+    { id: 'RPT', name: 'Report', color: '#d98a0b', title: 'Handoff · MIST', status: 'Draft',
+      screen: [['M', 'Chest pain, onset about 07:00'], ['I', 'Diaphoretic, pain 7/10'], ['S', 'BP 158/94 · HR 104 · SpO2 95%'], ['T', '<strong>ASA 324 mg PO · O2 2 L/min</strong>']],
+      head: 'A clean handoff in seconds.',
+      reasons: ['Turns rough notes into a standard MIST report', 'Fewer details lost between the field and the ED', 'Offline, a MIST template keeps the notes word for word'],
+      who: 'For EMS crews handing off to the receiving facility.' },
+    { id: 'SAFE', name: 'Hazards', color: '#d6453d', title: 'Scene · Camera 1', status: '1 hazard',
+      screen: [['ALERT', '<strong>Traffic in lane 2</strong>'], ['WHERE', 'Left of frame · confidence 0.91'], ['PPE', 'Gloves · eye protection'], ['VOICE', 'Spoken to the crew']],
+      head: 'A second set of eyes on the scene.',
+      reasons: ['Watches the camera for traffic, fire, downed lines and hostile bystanders', 'Calls the hazard out loud, so eyes stay on the patient', 'Reminds the crew of the right PPE for the scene'],
+      who: 'For every agency working an active scene.' },
+    { id: '10-8', name: 'Status', color: '#2f8a5b', title: 'Unit 01-A', status: '10-8 · In service',
+      screen: [['STATUS', '<strong>10-8</strong> available'], ['CALL', '26-104412 · chest pain'], ['ETA', '2 min 45 s · 1.2 mi'], ['CROSS', 'Main St & 4th Ave']],
+      head: 'The whole picture at a glance.',
+      reasons: ['Status, call and ETA on one screen, with no menus en route', 'Cross streets come from GPS, which cuts radio traffic', 'One tap goes 10-8 or 10-7, and Argus says it out loud'],
+      who: 'For every unit: EMS, Fire and Police.' },
+    { id: 'SIM', name: 'Train', color: '#0f8f86', title: 'Simulator · Scenario 3', status: 'Training',
+      screen: [['SCENE', 'Two-car collision, two patients, rain'], ['YOU', 'Secure the scene, request a second unit'], ['FEEDBACK', '<strong>Good call. Patient 2 is now unresponsive.</strong>'], ['NEXT', 'What do you do next?']],
+      head: 'Practice between calls.',
+      reasons: ['Realistic scenarios that react to every decision', 'Instant feedback, with no instructor needed on shift', 'Crews learn the tools before they need them on a real call'],
+      who: 'For new hires, refreshers and agency training officers.' },
+  ];
+
+  const tabsEl = document.getElementById('tabs'), panel = document.getElementById('panel');
+  const $ = (id) => document.getElementById(id);
+
+  TABS.forEach((t, i) => {
+    const b = document.createElement('button');
+    b.className = 'tab'; b.type = 'button'; b.setAttribute('role', 'tab'); b.id = 'tab-' + i;
+    b.style.setProperty('--tc', t.color);
+    b.innerHTML = `<i></i>${t.name}`;
+    b.addEventListener('click', () => select(i));
+    b.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      e.preventDefault();
+      const n = (i + (e.key === 'ArrowRight' ? 1 : -1) + TABS.length) % TABS.length;
+      select(n); tabsEl.children[n].focus();
+    });
+    tabsEl.appendChild(b);
+  });
+
+  function select(i) {
+    const t = TABS[i];
+    [...tabsEl.children].forEach((b, j) => { b.setAttribute('aria-selected', String(j === i)); b.tabIndex = j === i ? 0 : -1; });
+    panel.setAttribute('aria-labelledby', 'tab-' + i);
+    document.documentElement.style.setProperty('--glow', t.color);
+    $('p-title').textContent = t.title;
+    $('p-status').textContent = t.status;
+    $('p-screen').innerHTML = t.screen.map(([k, v], n) => `<div class="row" style="animation-delay:${n * 80}ms"><span class="k">${k}</span><span>${v}</span></div>`).join('');
+    $('p-head').textContent = t.head;
+    $('p-reasons').innerHTML = t.reasons.map((r) => `<li>${r}</li>`).join('');
+    $('p-who').textContent = t.who;
+  }
+  select(0);
+
+  const btn = $('cut'), state = $('signal-state');
+  btn.addEventListener('click', () => {
+    const off = document.body.classList.toggle('no-signal');
+    btn.setAttribute('aria-pressed', String(off));
+    btn.textContent = off ? 'Restore the signal' : 'Cut the signal';
+    state.textContent = off ? 'No service · Argus still running on device' : 'Signal · 4 bars LTE';
+  });
+})();
+</script>
+
+</body></html>
