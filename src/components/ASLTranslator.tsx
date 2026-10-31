@@ -4,9 +4,19 @@ import { Camera } from '@mediapipe/camera_utils';
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
 import { HAND_CONNECTIONS } from '@mediapipe/hands';
 import { motion, AnimatePresence } from 'motion/react';
-import { Languages, Mic, Volume2, RefreshCw, AlertTriangle, Info } from 'lucide-react';
+import { Languages, RefreshCw, Info } from 'lucide-react';
 import { translateGlosstoEnglish, translateEnglishtoASL } from '../services/geminiService';
 import { cn } from '../lib/utils';
+import { buildFeatureVector, LandmarkFrame } from '../lib/aslFeatures';
+import { classify, hasClassifierModel } from '../lib/aslClassifier';
+
+// Only glosses detected above this softmax confidence enter the buffer.
+const SIGN_CONFIDENCE_THRESHOLD = 0.35;
+// Minimum frames between accepted glosses, prevents the same window from
+// re-emitting the same sign on every frame.
+const SIGN_COOLDOWN_FRAMES = 20;
+// Window length (frames) over which trajectory and the current pose are read.
+const FEATURE_WINDOW = 15;
 
 export const ASLTranslator: React.FC<{ location?: { lat: number; lng: number; crossStreets: string | null; accuracy: number | null } | null }> = ({ location }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -30,12 +40,19 @@ export const ASLTranslator: React.FC<{ location?: { lat: number; lng: number; cr
   const [currentSign, setCurrentSign] = useState<string | null>(null);
   const [translation, setTranslation] = useState<string>('');
   const [isTranslating, setIsTranslating] = useState(false);
+  const [tracking, setTracking] = useState(false);
   const [confidence, setConfidence] = useState(0);
   const [mode, setMode] = useState<'ASL_TO_ENG' | 'ENG_TO_ASL'>('ASL_TO_ENG');
   const [inputText, setInputText] = useState('');
 
-  // Buffer for landmarks to prevent jitter and handle sequence
-  const landmarkBuffer = useRef<any[]>([]);
+  // Rolling window of the primary hand's landmark frames.
+  const landmarkBuffer = useRef<LandmarkFrame[]>([]);
+  // Monotonic frame counter used to enforce the cooldown between glosses.
+  const frameIdxRef = useRef(0);
+  const lastEmitFrameRef = useRef(-Infinity);
+  const lastEmitGlossRef = useRef<string | null>(null);
+  const inferenceInFlightRef = useRef(false);
+  const signClearTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -60,24 +77,31 @@ export const ASLTranslator: React.FC<{ location?: { lat: number; lng: number; cr
       canvasCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
       canvasCtx.drawImage(results.image, 0, 0, canvasRef.current.width, canvasRef.current.height);
 
-      if (results.multiHandLandmarks) {
+      const handsPresent = results.multiHandLandmarks && results.multiHandLandmarks.length > 0;
+
+      if (handsPresent) {
         for (const landmarks of results.multiHandLandmarks) {
           drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#10b981', lineWidth: 5 });
           drawLandmarks(canvasCtx, landmarks, { color: '#ffffff', lineWidth: 2, radius: 3 });
-          
-          // Add to buffer for inference
-          landmarkBuffer.current.push(landmarks);
-          if (landmarkBuffer.current.length > 15) {
-            landmarkBuffer.current.shift();
-            // Trigger pseudo-inference (V-to-G)
-            // In a real app, this would be a TFLite model call
-            // Here we simulate detection of common signs
-            handleInference();
-          }
         }
-        setConfidence(results.multiHandLandmarks.length > 0 ? 0.92 : 0);
+
+        // Feed only the primary hand into the per-frame feature window.
+        // Two-hand modelling is deferred until the classifier model lands.
+        const primary = results.multiHandLandmarks[0] as LandmarkFrame;
+        landmarkBuffer.current.push(primary);
+        if (landmarkBuffer.current.length > FEATURE_WINDOW) {
+          landmarkBuffer.current.shift();
+        }
+
+        frameIdxRef.current += 1;
+        if (landmarkBuffer.current.length === FEATURE_WINDOW) {
+          runInference();
+        }
+        setTracking(true);
       } else {
-        setConfidence(0);
+        setTracking(false);
+        // Hand left frame — forget the window so a new sign starts clean.
+        landmarkBuffer.current.length = 0;
       }
       canvasCtx.restore();
     });
@@ -100,24 +124,48 @@ export const ASLTranslator: React.FC<{ location?: { lat: number; lng: number; cr
     };
   }, []);
 
-  const handleInference = () => {
-    // Simulated V-to-G (Vision to Gloss)
-    const mockGlosses = ['HELLO', 'NEED', 'HELP', 'PAIN', 'CHEST', 'PATIENT', 'STABLE', 'BREATHING'];
-    const randomGloss = mockGlosses[Math.floor(Math.random() * mockGlosses.length)];
-    
-    if (Math.random() > 0.92) { 
-      setCurrentSign(randomGloss);
-      
-      // Clear current sign after 1.0s
-      setTimeout(() => setCurrentSign(null), 1000);
+  // V-to-G (Vision to Gloss): extract real geometric features from the
+  // sliding landmark window, run the classifier (TFJS model if wired, or
+  // the deterministic heuristic fallback), and only emit a gloss when
+  // softmax confidence clears the threshold and the cooldown has elapsed.
+  const runInference = () => {
+    if (inferenceInFlightRef.current) return;
+    inferenceInFlightRef.current = true;
 
-      setGlossBuffer(prev => {
-        if (prev[prev.length - 1] === randomGloss) return prev;
-        const next = [...prev, randomGloss];
-        if (next.length > 8) return next.slice(1);
-        return next;
+    const feat = buildFeatureVector(landmarkBuffer.current);
+    classify(feat)
+      .then(pred => {
+        setConfidence(pred.confidence);
+        const frameIdx = frameIdxRef.current;
+        const sinceLast = frameIdx - lastEmitFrameRef.current;
+        const belowThreshold = pred.confidence < SIGN_CONFIDENCE_THRESHOLD;
+        const inCooldown = sinceLast < SIGN_COOLDOWN_FRAMES;
+        const sameAsLast = pred.gloss === lastEmitGlossRef.current;
+        if (belowThreshold || inCooldown || sameAsLast) return;
+
+        lastEmitFrameRef.current = frameIdx;
+        lastEmitGlossRef.current = pred.gloss;
+        setCurrentSign(pred.gloss);
+        if (signClearTimerRef.current !== null) {
+          window.clearTimeout(signClearTimerRef.current);
+        }
+        signClearTimerRef.current = window.setTimeout(() => {
+          setCurrentSign(null);
+          signClearTimerRef.current = null;
+        }, 1000);
+
+        setGlossBuffer(prev => {
+          const next = [...prev, pred.gloss];
+          if (next.length > 8) return next.slice(1);
+          return next;
+        });
+      })
+      .catch(err => {
+        console.error('ASL classify failed:', err);
+      })
+      .finally(() => {
+        inferenceInFlightRef.current = false;
       });
-    }
   };
 
   const performTranslation = async () => {
@@ -180,12 +228,20 @@ export const ASLTranslator: React.FC<{ location?: { lat: number; lng: number; cr
           {/* HUD Overlay */}
           <div className="absolute top-4 left-4 flex flex-col gap-2">
             <div className="flex items-center gap-2 px-2 py-1 bg-black/60 border border-cad-border">
-              <div className={cn("w-2 h-2 rounded-none", confidence > 0.5 ? "bg-cad-green animate-pulse" : "bg-cad-red")} />
-              <span className="text-[9px] font-bold uppercase tracking-widest">TRACKING: {confidence > 0.5 ? 'LOCKED' : 'SEARCHING'}</span>
+              <div className={cn("w-2 h-2 rounded-none", tracking ? "bg-cad-green animate-pulse" : "bg-cad-red")} />
+              <span className="text-[9px] font-bold uppercase tracking-widest">TRACKING: {tracking ? 'LOCKED' : 'SEARCHING'}</span>
             </div>
-            {confidence > 0 && (
-              <div className="px-2 py-1 bg-cad-green/20 border border-cad-green/30">
-                <span className="text-[9px] font-bold uppercase tracking-widest text-cad-green">CONFIDENCE: {(confidence * 100).toFixed(0)}%</span>
+            {tracking && (
+              <div className={cn(
+                "px-2 py-1 border",
+                confidence >= SIGN_CONFIDENCE_THRESHOLD
+                  ? "bg-cad-green/20 border-cad-green/30 text-cad-green"
+                  : "bg-cad-amber/10 border-cad-amber/20 text-cad-amber"
+              )}>
+                <span className="text-[9px] font-bold uppercase tracking-widest">
+                  SIGN CONFIDENCE: {(confidence * 100).toFixed(0)}%
+                  {!hasClassifierModel() && ' • HEURISTIC'}
+                </span>
               </div>
             )}
           </div>
