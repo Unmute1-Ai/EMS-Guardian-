@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Staff — Unmute1ai</title>
+<meta name="description" content="Unmute1ai staff area: quick links to the public site, the sample assessment, and the field app.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;1,8..60,300&family=Geist:wght@400;500&family=Geist+Mono:wght@400&family=Barlow+Condensed:wght@600;700&display=swap">
+<style>
+/* Layout: the staff landing. Same editorial column as the hub — quiet serif, stone-green field, one hi-vis accent — with a plain quick-link list. */
+:root {
+  --bg: #f3f4f1;          /* pale stone, faint green bias */
+  --surface: #fbfbf9;
+  --ink: #14211c;         /* deep green-ink */
+  --muted: #5d6a64;
+  --line: #dde2dd;
+  --glow: #3b6fd8;
+  --serif: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+  --sans: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --stencil: "Barlow Condensed", "Arial Narrow", sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #0f1613; --surface: #141d19; --ink: #e9eeea; --muted: #94a19a; --line: #24302b; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #0f1613; --surface: #141d19; --ink: #e9eeea; --muted: #94a19a; --line: #24302b; color-scheme: dark; }
+:root { --hivis: #e8590c; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --hivis: #ff7a2e; } }
+:root[data-theme="dark"] { --hivis: #ff7a2e; }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.65 var(--sans); -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--serif); font-weight: 300; margin: 0; text-wrap: balance; letter-spacing: -.015em; }
+p { margin: 0; max-width: 60ch; }
+.label { font: 700 13px/1 var(--stencil); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--glow); outline-offset: 3px; border-radius: 4px; }
+
+/* Nav */
+nav { padding-block: 22px; }
+nav .wrap { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.mark { font: 700 24px/1 var(--stencil); letter-spacing: .06em; text-transform: uppercase; }
+.mark span { color: var(--hivis); }
+.nav-links { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.nav-link { font-size: 15px; color: var(--muted); text-decoration: none; }
+.nav-link:hover { color: var(--ink); }
+.nav-link[aria-current="page"] { color: var(--ink); }
+
+/* Hero */
+.hero { padding-block: clamp(56px, 10vw, 120px) clamp(48px, 7vw, 88px); }
+.hero h1 { font-size: clamp(48px, 8.4vw, 104px); line-height: .98; max-width: 16ch; }
+.hero h1 em { font-style: italic; color: var(--hivis); }
+.hero .lede { font-size: clamp(18px, 2vw, 21px); color: var(--muted); margin-top: 28px; max-width: 52ch; }
+.chevrons { height: 10px; background: repeating-linear-gradient(-45deg, var(--hivis) 0 12px, transparent 12px 24px); }
+
+/* Sections */
+section { padding-block: clamp(56px, 8vw, 96px); border-top: 1px solid var(--line); }
+.sec-intro { display: grid; grid-template-columns: 1fr 1.4fr; gap: 40px; align-items: end; margin-bottom: 40px; }
+.sec-intro h2 { font-size: clamp(36px, 5vw, 60px); line-height: 1.02; }
+.sec-intro p { color: var(--muted); }
+
+/* Quick links: one ruled list, title left, one-line description below */
+.qlinks { list-style: none; margin: 0; padding: 0; border-top: 2px solid var(--ink); }
+.qlinks li { border-bottom: 1px solid var(--line); }
+.qlinks a { display: block; padding: 22px 0; text-decoration: none; }
+.qlinks .t { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.qlinks .t strong { font-family: var(--serif); font-weight: 300; font-size: clamp(24px, 3vw, 34px); line-height: 1.1; letter-spacing: -.015em; transition: color .3s; }
+.qlinks .arr { font: 700 20px/1 var(--stencil); color: var(--muted); transition: transform .3s, color .3s; }
+.qlinks a:hover .t strong { color: var(--hivis); }
+.qlinks a:hover .arr { color: var(--ink); transform: translateX(3px); }
+.qlinks .d { display: block; margin-top: 6px; color: var(--muted); font-size: 15px; max-width: 62ch; }
+.qlinks .tag { font: 700 12px/1 var(--stencil); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 2px; padding: 5px 8px; white-space: nowrap; }
+
+.note { color: var(--muted); font-size: 15px; max-width: 72ch; }
+.note strong { color: var(--ink); font-weight: 500; }
+
+footer { padding-block: 40px 56px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
+
+@media (max-width: 860px) {
+  .sec-intro { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <span class="mark">Unmute1<span>ai</span></span>
+    <span class="nav-links">
+      <a class="nav-link" href="../welcome/">Hub</a>
+      <a class="nav-link" href="../argus/">Argus Responder</a>
+      <a class="nav-link" href="../accessguard/">U1 AccessGuard</a>
+      <a class="nav-link" href="/">Launch app</a>
+      <a class="nav-link" href="https://github.com/Unmute1-Ai/EMS-Guardian-" target="_blank" rel="noopener">GitHub ↗</a>
+    </span>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="label">Unmute1ai · Staff area</span>
+    <h1 style="margin-top:22px">Staff <em>room.</em></h1>
+    <p class="lede">Quick links for Unmute1ai staff. This page is part of the public site and holds nothing sensitive — no accounts, no records, no patient or assessment data.</p>
+  </div>
+</header>
+<div class="chevrons" aria-hidden="true"></div>
+
+<section style="border-top:0">
+  <div class="wrap">
+    <div class="sec-intro">
+      <h2>Quick links.</h2>
+      <p>The field app, the public product pages, and the sample assessment — one click each.</p>
+    </div>
+    <ul class="qlinks">
+      <li>
+        <a href="/">
+          <span class="t"><strong>U1 Field</strong><span class="arr">→</span></span>
+          <span class="d">The offline-first field app this repository ships, at the root of the site.</span>
+        </a>
+      </li>
+      <li>
+        <a href="/welcome/">
+          <span class="t"><strong>Welcome hub</strong><span class="arr">→</span></span>
+          <span class="d">The public hub for both products.</span>
+        </a>
+      </li>
+      <li>
+        <a href="/argus/">
+          <span class="t"><strong>Argus Responder</strong><span class="arr">→</span></span>
+          <span class="d">A voice for patients who sign, speak another language, or can't speak at all.</span>
+        </a>
+      </li>
+      <li>
+        <a href="/accessguard/">
+          <span class="t"><strong>U1 AccessGuard</strong><span class="arr">→</span></span>
+          <span class="d">Assessments that show their work: scores, findings, and the evidence hash.</span>
+        </a>
+      </li>
+      <li>
+        <a href="/accessguard/propel-earth-assessment.pdf" download>
+          <span class="t"><strong>Sample assessment (PDF)</strong><span class="tag">Download</span></span>
+          <span class="d">The propel.earth assessment as a downloadable PDF, exactly as published on the AccessGuard page.</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="note"><strong>Coming later:</strong> interactive staff tooling arrives with a server-side tier. Until then this page is static quick links, nothing more.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>Unmute1ai · Staff area</span>
+    <a class="nav-link" href="https://github.com/Unmute1-Ai/EMS-Guardian-" target="_blank" rel="noopener">github.com/Unmute1-Ai/EMS-Guardian- ↗</a>
+    <span>Accessibility first. Authority by design.</span>
+    <a class="nav-link" href="/staff/">Staff Login</a>
+  </div>
+</footer>
+
+</body>
+</html>
