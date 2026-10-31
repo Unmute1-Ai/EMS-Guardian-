@@ -28,6 +28,29 @@ Do not place real PHI, credentials, secrets, or production API keys in the repos
 
 The built site is more than the app. `/welcome/` is the Unmute1ai platform hub, linking **Argus Responder** at `/argus/`, **U1 AccessGuard** at `/accessguard/`, and the U1 Field app at the root. The marketing pages live in `public/` and are copied verbatim into `dist/` by the build; the app itself is untouched at `/`.
 
+## Staff area
+
+`/staff/` is a password-protected static landing page of staff quick links. Protection is nginx HTTP basic auth — there is no backend, no sessions, no roles, and no self-service password reset; browsers show their native login prompt. Interactive staff tooling would require the server-side tier (see the open Express-rewrite discussion) and is out of scope here.
+
+### Creating the credentials file
+
+Credentials are operator-provided and never committed: the file is git-ignored and mounted read-only into the container.
+
+```bash
+mkdir -p nginx
+htpasswd -cB nginx/staff.htpasswd <username>   # -c creates the file; -B selects bcrypt
+```
+
+Add another account (appends; omit `-c`):
+
+```bash
+htpasswd -B nginx/staff.htpasswd <username>
+```
+
+Remove an account by deleting its line from `nginx/staff.htpasswd`. nginx reads the file per request, so account changes take effect on the next request without a reload. If the file did not exist when the container started, Docker binds a placeholder directory at that path instead — remove it (`rmdir nginx/staff.htpasswd`), generate the file, then recreate the container (`docker compose -f docker-compose.production.yml up -d --force-recreate web`).
+
+Passwords travel only over TLS: the protection lives on the 443 server and port 80 redirects to HTTPS. Repeated attempts are rate-limited by nginx to 5 requests/minute per IP after a 10-request burst.
+
 ## Quick start
 
 Requirements: Node.js 18+ and npm 9+.
