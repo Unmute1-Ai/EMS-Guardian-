@@ -69,6 +69,10 @@ section { padding-block: clamp(56px, 8vw, 96px); border-top: 1px solid var(--lin
 .product p { color: var(--muted); font-size: 16px; }
 .product .btn { justify-self: start; margin-top: 8px; }
 
+/* Secondary download on a product card — quiet text link, so the solid buttons stay the only strong CTAs and the two cards keep equal prominence */
+.card-dl { justify-self: start; font-size: 15px; color: var(--muted); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
+.card-dl:hover { color: var(--ink); }
+
 /* Buttons */
 .btn { display: inline-flex; align-items: center; gap: 10px; padding: 13px 20px; border-radius: 2px; font: 500 16px/1 var(--stencil); letter-spacing: .1em; text-transform: uppercase; text-decoration: none; border: 2px solid var(--line); background: var(--surface); color: var(--ink); transition: border-color .3s; }
 .btn:hover { border-color: var(--ink); }
@@ -135,6 +139,7 @@ footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; g
         <h3>U1 AccessGuard</h3>
         <p>Accessibility and security assessments that show their work: scores, findings, the engine that ran, and a SHA-256 hash of the evidence behind the result.</p>
         <a class="btn solid" href="../accessguard/">Explore U1 AccessGuard <span class="arr">→</span></a>
+        <a class="card-dl" href="/accessguard/propel-earth-assessment.pdf" download>Download report (PDF) ↓</a>
       </div>
     </div>
   </div>
@@ -158,6 +163,7 @@ footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; g
     <span>An Unmute1ai project</span>
     <a class="nav-link" href="https://github.com/Unmute1-Ai/EMS-Guardian-" target="_blank" rel="noopener">github.com/Unmute1-Ai/EMS-Guardian- ↗</a>
     <span>Accessibility first. Authority by design.</span>
+    <a class="nav-link" href="/staff/">Staff Login</a>
   </div>
 </footer>
 
