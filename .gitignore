@@ -6,3 +6,5 @@ coverage/
 *.log
 .env*
 !.env.example
+# Operator-provided staff credentials — never commit (README "Staff area")
+nginx/staff.htpasswd

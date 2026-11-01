@@ -13,6 +13,10 @@ services:
     volumes:
       # TLS certificates (operator-provided: cert.pem, key.pem)
       - ./certs:/etc/nginx/certs:ro
+      # Staff basic-auth credentials (operator-provided, never committed —
+      # generate with `htpasswd -cB nginx/staff.htpasswd <user>`, see README
+      # "Staff area"). Read-only, matching the certs mount pattern.
+      - ./nginx/staff.htpasswd:/etc/nginx/staff.htpasswd:ro
       # nginx access/error logs
       - ./logs/nginx:/var/log/nginx:rw
 
