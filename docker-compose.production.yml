@@ -13,20 +13,42 @@ services:
     volumes:
       # TLS certificates (operator-provided: cert.pem, key.pem)
       - ./certs:/etc/nginx/certs:ro
-      # Staff basic-auth credentials (operator-provided, never committed —
-      # generate with `htpasswd -cB nginx/staff.htpasswd <user>`, see README
-      # "Staff area"). Read-only, matching the certs mount pattern.
-      - ./nginx/staff.htpasswd:/etc/nginx/staff.htpasswd:ro
+      # Staff basic-auth credential store (never committed). Directory mount,
+      # not single-file: first-boot generation needs write access, and a
+      # missing single-file source makes Docker silently bind a directory at
+      # the file path — the gotcha this mount shape eliminates.
+      - ./nginx/staff:/etc/nginx/staff
       # nginx access/error logs
       - ./logs/nginx:/var/log/nginx:rw
+
+    # Staff credential bootstrap (staff-bootstrap.sh entrypoint):
+    # - STAFF_USER + STAFF_PASSWORD generate ./nginx/staff/staff.htpasswd
+    #   on first boot (bcrypt)
+    # - STAFF_GENERATE_PASSWORD=true alone generates a strong random
+    #   password, logged once at startup
+    # - an existing credential file always wins; with none of these the
+    #   container refuses to start (fail closed — /staff/ is never served
+    #   unauthenticated)
+    environment:
+      - STAFF_USER=${STAFF_USER:-}
+      - STAFF_PASSWORD=${STAFF_PASSWORD:-}
+      - STAFF_GENERATE_PASSWORD=${STAFF_GENERATE_PASSWORD:-}
 
     # Security options
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    # Minimal capability set for the nginx root master: bind privileged
+    # ports, create/own its cache dirs (CHOWN), and drop workers to the
+    # nginx user (SETUID/SETGID). Without these the worker processes die at
+    # startup under cap_drop: ALL (setgid(101) EPERM) — verified in the
+    # go-live run matrix. Everything else stays dropped.
     cap_add:
       - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
 
     # Resource limits
     deploy:
