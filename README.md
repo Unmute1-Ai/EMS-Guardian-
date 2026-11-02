@@ -32,22 +32,41 @@ The built site is more than the app. `/welcome/` is the Unmute1ai platform hub, 
 
 `/staff/` is a password-protected static landing page of staff quick links. Protection is nginx HTTP basic auth — there is no backend, no sessions, no roles, and no self-service password reset; browsers show their native login prompt. Interactive staff tooling would require the server-side tier (see the open Express-rewrite discussion) and is out of scope here.
 
-### Creating the credentials file
+### Go-live: one command
 
-Credentials are operator-provided and never committed: the file is git-ignored and mounted read-only into the container.
+Set the staff credentials in the environment and bring the stack up — that is the whole deployment:
 
 ```bash
-mkdir -p nginx
-htpasswd -cB nginx/staff.htpasswd <username>   # -c creates the file; -B selects bcrypt
+export STAFF_USER=ops STAFF_PASSWORD='a-strong-passphrase'
+docker compose -f docker-compose.production.yml up -d
+```
+
+On first boot the container generates a bcrypt credential file at `nginx/staff/staff.htpasswd`. The file is written once and never overwritten: it survives container recreation, and later boots need no credential environment at all.
+
+Prefer a throwaway first credential to picking a password? Set `STAFF_GENERATE_PASSWORD=true` (and no `STAFF_PASSWORD`): the container generates a strong random password and logs it exactly once at startup — read it from `docker compose -f docker-compose.production.yml logs web`. The username defaults to `staff` unless `STAFF_USER` is set.
+
+Fail closed: with no credential file and no credential environment, the container exits non-zero with the exact variable to set. `/staff/` is never served unauthenticated, including after misconfiguration.
+
+Two operator-side prerequisites come from the existing mounts: TLS certificates in `./certs/` must be readable by the container (root-owned, or 644 — a key owned by your user with mode 600 is not readable inside the container), and the `./nginx/staff/` store directory should be left for Docker to create on first `up` (the container runs with dropped capabilities and cannot generate into a directory it does not own).
+
+Rotate credentials by replacing (or deleting) `nginx/staff/staff.htpasswd`, then recreating the container: `docker compose -f docker-compose.production.yml up -d --force-recreate web`.
+
+### Manual alternative: operator-provided htpasswd
+
+Prefer managing the file yourself? Place an htpasswd file in the store directory before starting — an operator-provided file always wins over the bootstrap environment:
+
+```bash
+mkdir -p nginx/staff
+htpasswd -cB nginx/staff/staff.htpasswd <username>   # -c creates the file; -B selects bcrypt
 ```
 
 Add another account (appends; omit `-c`):
 
 ```bash
-htpasswd -B nginx/staff.htpasswd <username>
+htpasswd -B nginx/staff/staff.htpasswd <username>
 ```
 
-Remove an account by deleting its line from `nginx/staff.htpasswd`. nginx reads the file per request, so account changes take effect on the next request without a reload. If the file did not exist when the container started, Docker binds a placeholder directory at that path instead — remove it (`rmdir nginx/staff.htpasswd`), generate the file, then recreate the container (`docker compose -f docker-compose.production.yml up -d --force-recreate web`).
+Remove an account by deleting its line, then recreate the container — the entrypoint copies the store file into place at boot, so account changes take effect on recreation rather than per request.
 
 Passwords travel only over TLS: the protection lives on the 443 server and port 80 redirects to HTTPS. Repeated attempts are rate-limited by nginx to 5 requests/minute per IP after a 10-request burst.
 
