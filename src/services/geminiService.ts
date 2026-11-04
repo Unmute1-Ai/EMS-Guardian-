@@ -1,4 +1,6 @@
-import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
+import { parseFingerspellResponse } from '../lib/fingerspell';
+import type { FingerspellPayload } from '../lib/fingerspell';
 
 // Constructed on first use: without a baked key (e.g. a demo build before keys
 // are injected) the SDK throws at construction — eagerly that takes the whole
@@ -11,6 +13,13 @@ function getAi(): GoogleGenAI {
     aiInstance = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   }
   return aiInstance;
+}
+
+// Static build-time define (see vite.config.ts): true in builds made with a
+// key, false otherwise. ASL mode uses it to pick the real fingerspelling
+// path vs the offline heuristic preview.
+export function hasGeminiApiKey(): boolean {
+  return typeof process.env.GEMINI_API_KEY === 'string' && process.env.GEMINI_API_KEY.length > 0;
 }
 
 export async function generateSimulatorScenario(userAction?: string, history: any[] = []) {
@@ -120,4 +129,66 @@ export async function getCrossStreets(lat: number, lng: number) {
     },
   });
   return response.text;
+}
+
+// --- ASL fingerspelling (the real recognition path for ASL mode) ------------
+
+const FINGERSPELL_MODEL = 'gemini-2.5-flash';
+
+const FINGERSPELL_SYSTEM_PROMPT = [
+  'You read ASL fingerspelling from a single video frame of one hand.',
+  'Identify which letter A-Z the hand is fingerspelling.',
+  'Reply only with JSON: {"letter": "X", "confidence": 0.93}.',
+  '"letter" is one uppercase letter, or "" when no clearly fingerspelled handshape is visible.',
+  '"confidence" is your certainty in the identification, from 0 to 1.',
+  'J and Z are drawn with motion, not held: if the handshape and pose match the start or middle of a J or Z, report it with proportionally lower confidence.',
+].join(' ');
+
+// Reads one captured camera frame (any image data URL) and returns the
+// recognized letter + confidence, or null when the frame shows no
+// fingerspelled handshape or the response cannot be trusted. Throws on
+// transport/API errors so callers can log them.
+export async function recognizeFingerspell(frameDataUrl: string): Promise<FingerspellPayload | null> {
+  const base64 = frameDataUrl.replace(/^data:[^,]+,/, '');
+  const response = await getAi().models.generateContent({
+    model: FINGERSPELL_MODEL,
+    contents: [{
+      role: 'user',
+      parts: [
+        { inlineData: { mimeType: 'image/jpeg', data: base64 } },
+        { text: 'Read the fingerspelled letter in this frame.' },
+      ],
+    }],
+    config: {
+      systemInstruction: FINGERSPELL_SYSTEM_PROMPT,
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          letter: {
+            type: Type.STRING,
+            description: 'Single uppercase A-Z letter, or "" when no fingerspelled handshape is visible',
+          },
+          confidence: {
+            type: Type.NUMBER,
+            description: 'Certainty in the identification, from 0 to 1',
+          },
+        },
+        required: ['letter', 'confidence'],
+      },
+    },
+  });
+
+  const raw = response.text;
+  if (!raw) {
+    console.error('recognizeFingerspell: Gemini returned an empty response');
+    return null;
+  }
+
+  const payload = parseFingerspellResponse(raw);
+  if (!payload) {
+    console.error('recognizeFingerspell: unparseable response:', raw.slice(0, 200));
+    return null;
+  }
+  return payload;
 }

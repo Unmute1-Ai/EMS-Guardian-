@@ -1,14 +1,17 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Hands, Results } from '@mediapipe/hands';
 import { Camera } from '@mediapipe/camera_utils';
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
 import { HAND_CONNECTIONS } from '@mediapipe/hands';
 import { motion, AnimatePresence } from 'motion/react';
-import { Languages, RefreshCw, Info } from 'lucide-react';
+import { Languages, RefreshCw, Info, Delete, Trash2 } from 'lucide-react';
 import { translateGlosstoEnglish, translateEnglishtoASL } from '../services/geminiService';
 import { cn } from '../lib/utils';
 import { buildFeatureVector, LandmarkFrame } from '../lib/aslFeatures';
 import { classify, hasClassifierModel } from '../lib/aslClassifier';
+import { recognizeFingerspell, hasGeminiApiKey } from '../services/geminiService';
+import { createFingerspellAccumulator, createRecognitionGate } from '../lib/fingerspell';
+import type { CommittedLetter, FingerspellAccumulator } from '../lib/fingerspell';
 
 // Only glosses detected above this softmax confidence enter the buffer.
 const SIGN_CONFIDENCE_THRESHOLD = 0.35;
@@ -17,6 +20,16 @@ const SIGN_CONFIDENCE_THRESHOLD = 0.35;
 const SIGN_COOLDOWN_FRAMES = 20;
 // Window length (frames) over which trajectory and the current pose are read.
 const FEATURE_WINDOW = 15;
+
+// Fingerspelling (Gemini path): one camera frame every FINGERSPELL_INTERVAL_MS
+// goes to Gemini with at most one request in flight — excess frames are
+// dropped, never queued. Smoothing tuning notes live with the accumulator in
+// fingerspell.ts.
+const FINGERSPELL_INTERVAL_MS = 300;
+const FINGERSPELL_FRAME_WIDTH = 640;
+const FINGERSPELL_FRAME_HEIGHT = 360;
+const FINGERSPELL_JPEG_QUALITY = 0.6;
+const WORD_BUFFER_LIMIT = 32;
 
 export const ASLTranslator: React.FC<{ location?: { lat: number; lng: number; crossStreets: string | null; accuracy: number | null } | null }> = ({ location }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -45,6 +58,12 @@ export const ASLTranslator: React.FC<{ location?: { lat: number; lng: number; cr
   const [mode, setMode] = useState<'ASL_TO_ENG' | 'ENG_TO_ASL'>('ASL_TO_ENG');
   const [inputText, setInputText] = useState('');
 
+  // Gemini fingerspelling path. When no key is baked in at build time, ASL
+  // mode falls back to the gloss pipeline below, labeled as a preview.
+  const [wordEntries, setWordEntries] = useState<CommittedLetter[]>([]);
+  const [letterConfidence, setLetterConfidence] = useState(0);
+  const fingerspellActive = useMemo(() => hasGeminiApiKey(), []);
+
   // Rolling window of the primary hand's landmark frames.
   const landmarkBuffer = useRef<LandmarkFrame[]>([]);
   // Monotonic frame counter used to enforce the cooldown between glosses.
@@ -53,6 +72,18 @@ export const ASLTranslator: React.FC<{ location?: { lat: number; lng: number; cr
   const lastEmitGlossRef = useRef<string | null>(null);
   const inferenceInFlightRef = useRef(false);
   const signClearTimerRef = useRef<number | null>(null);
+
+  // Fingerspelling capture state (see the capture effect below).
+  const fingerspellAccumulatorRef = useRef<FingerspellAccumulator | null>(null);
+  if (fingerspellAccumulatorRef.current === null) {
+    fingerspellAccumulatorRef.current = createFingerspellAccumulator();
+  }
+  const recognitionGateRef = useRef(createRecognitionGate());
+  const trackingRef = useRef(false);
+  const modeRef = useRef(mode);
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
 
   useEffect(() => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -97,8 +128,10 @@ export const ASLTranslator: React.FC<{ location?: { lat: number; lng: number; cr
         if (landmarkBuffer.current.length === FEATURE_WINDOW) {
           runInference();
         }
+        trackingRef.current = true;
         setTracking(true);
       } else {
+        trackingRef.current = false;
         setTracking(false);
         // Hand left frame — forget the window so a new sign starts clean.
         landmarkBuffer.current.length = 0;
@@ -124,11 +157,74 @@ export const ASLTranslator: React.FC<{ location?: { lat: number; lng: number; cr
     };
   }, []);
 
+  // Flash a freshly committed letter or gloss over the video for ~1s.
+  const flashSign = useCallback((sign: string) => {
+    setCurrentSign(sign);
+    if (signClearTimerRef.current !== null) {
+      window.clearTimeout(signClearTimerRef.current);
+    }
+    signClearTimerRef.current = window.setTimeout(() => {
+      setCurrentSign(null);
+      signClearTimerRef.current = null;
+    }, 1000);
+  }, []);
+
+  // Fingerspelling capture loop: sample the camera on a fixed cadence and ask
+  // Gemini to read the letter, at most one request in flight. Runs only in
+  // ASL_TO_ENG (ENG_TO_ASL is keyboard input) and only while a hand is
+  // tracked — MediaPipe gates the spend, Gemini does the reading.
+  useEffect(() => {
+    if (!fingerspellActive) return;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = FINGERSPELL_FRAME_WIDTH;
+    canvas.height = FINGERSPELL_FRAME_HEIGHT;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const tick = () => {
+      const video = videoRef.current;
+      if (!video || video.readyState < 2 || video.videoWidth === 0) return;
+      if (modeRef.current !== 'ASL_TO_ENG') return;
+      if (!trackingRef.current) return;
+      if (!recognitionGateRef.current.tryAcquire()) return;
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const frame = canvas.toDataURL('image/jpeg', FINGERSPELL_JPEG_QUALITY);
+
+      recognizeFingerspell(frame)
+        .then(result => {
+          if (!result) return;
+          setLetterConfidence(result.confidence);
+          const committed = fingerspellAccumulatorRef.current?.add(result) ?? null;
+          if (committed) {
+            setWordEntries(prev => {
+              const next = [...prev, committed];
+              return next.length > WORD_BUFFER_LIMIT ? next.slice(-WORD_BUFFER_LIMIT) : next;
+            });
+            flashSign(committed.letter);
+          }
+        })
+        .catch(err => {
+          console.error('Fingerspell recognition failed:', err);
+        })
+        .finally(() => {
+          recognitionGateRef.current.release();
+        });
+    };
+
+    const interval = window.setInterval(tick, FINGERSPELL_INTERVAL_MS);
+    return () => window.clearInterval(interval);
+  }, [fingerspellActive, flashSign]);
+
   // V-to-G (Vision to Gloss): extract real geometric features from the
   // sliding landmark window, run the classifier (TFJS model if wired, or
   // the deterministic heuristic fallback), and only emit a gloss when
   // softmax confidence clears the threshold and the cooldown has elapsed.
+  // With a Gemini key present, ASL mode uses the fingerspelling path instead
+  // and this pipeline stays dormant (it remains the no-key offline preview).
   const runInference = () => {
+    if (fingerspellActive) return;
     if (inferenceInFlightRef.current) return;
     inferenceInFlightRef.current = true;
 
@@ -145,14 +241,7 @@ export const ASLTranslator: React.FC<{ location?: { lat: number; lng: number; cr
 
         lastEmitFrameRef.current = frameIdx;
         lastEmitGlossRef.current = pred.gloss;
-        setCurrentSign(pred.gloss);
-        if (signClearTimerRef.current !== null) {
-          window.clearTimeout(signClearTimerRef.current);
-        }
-        signClearTimerRef.current = window.setTimeout(() => {
-          setCurrentSign(null);
-          signClearTimerRef.current = null;
-        }, 1000);
+        flashSign(pred.gloss);
 
         setGlossBuffer(prev => {
           const next = [...prev, pred.gloss];
@@ -166,6 +255,13 @@ export const ASLTranslator: React.FC<{ location?: { lat: number; lng: number; cr
       .finally(() => {
         inferenceInFlightRef.current = false;
       });
+  };
+
+  const handleWordBackspace = () => setWordEntries(prev => prev.slice(0, -1));
+
+  const handleWordClear = () => {
+    setWordEntries([]);
+    fingerspellAccumulatorRef.current?.reset();
   };
 
   const performTranslation = async () => {
@@ -234,13 +330,18 @@ export const ASLTranslator: React.FC<{ location?: { lat: number; lng: number; cr
             {tracking && (
               <div className={cn(
                 "px-2 py-1 border",
-                confidence >= SIGN_CONFIDENCE_THRESHOLD
-                  ? "bg-cad-green/20 border-cad-green/30 text-cad-green"
-                  : "bg-cad-amber/10 border-cad-amber/20 text-cad-amber"
+                fingerspellActive
+                  ? letterConfidence >= 0.5
+                    ? "bg-cad-green/20 border-cad-green/30 text-cad-green"
+                    : "bg-cad-amber/10 border-cad-amber/20 text-cad-amber"
+                  : confidence >= SIGN_CONFIDENCE_THRESHOLD
+                    ? "bg-cad-green/20 border-cad-green/30 text-cad-green"
+                    : "bg-cad-amber/10 border-cad-amber/20 text-cad-amber"
               )}>
                 <span className="text-[9px] font-bold uppercase tracking-widest">
-                  SIGN CONFIDENCE: {(confidence * 100).toFixed(0)}%
-                  {!hasClassifierModel() && ' • HEURISTIC'}
+                  {fingerspellActive
+                    ? `LETTER CONFIDENCE: ${(letterConfidence * 100).toFixed(0)}% • GEMINI`
+                    : `SIGN CONFIDENCE: ${(confidence * 100).toFixed(0)}%${!hasClassifierModel() ? ' • HEURISTIC' : ''}`}
                 </span>
               </div>
             )}
@@ -284,39 +385,102 @@ export const ASLTranslator: React.FC<{ location?: { lat: number; lng: number; cr
           </div>
         </div>
 
-        <div className="bg-cad-surface border border-cad-border p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-cad-muted">GLOSSES DETECTED (V-TO-G)</h3>
-              <div className="flex items-center gap-1.5 px-2 py-0.5 bg-cad-red/10 border border-cad-red/20 rounded-none text-[8px] font-bold text-cad-red uppercase tracking-widest animate-pulse">
-                <div className="w-1 h-1 bg-cad-red rounded-none" />
-                LIVE
+        {fingerspellActive ? (
+          <div className="bg-cad-surface border border-cad-border p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-cad-muted">FINGERSPELLED TEXT (GEMINI VISION)</h3>
+                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-cad-red/10 border border-cad-red/20 rounded-none text-[8px] font-bold text-cad-red uppercase tracking-widest animate-pulse">
+                  <div className="w-1 h-1 bg-cad-red rounded-none" />
+                  LIVE
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleWordBackspace}
+                  disabled={wordEntries.length === 0}
+                  className="flex items-center gap-1 text-[9px] font-bold text-cad-amber uppercase hover:underline disabled:opacity-40 disabled:hover:no-underline"
+                >
+                  <Delete className="w-3 h-3" />
+                  BACKSPACE
+                </button>
+                <button
+                  onClick={handleWordClear}
+                  disabled={wordEntries.length === 0}
+                  className="flex items-center gap-1 text-[9px] font-bold text-cad-red uppercase hover:underline disabled:opacity-40 disabled:hover:no-underline"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  CLEAR
+                </button>
               </div>
             </div>
-            <button 
-              onClick={() => setGlossBuffer([])}
-              className="text-[9px] font-bold text-cad-amber uppercase hover:underline"
-            >
-              CLEAR BUFFER
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2 min-h-[40px]">
-            {glossBuffer.length === 0 ? (
-              <p className="text-[10px] text-cad-muted italic uppercase">PERFORM SIGNS TO POPULATE BUFFER...</p>
-            ) : (
-              glossBuffer.map((gloss, i) => (
-                <motion.span
-                  key={i}
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  className="px-2 py-0.5 bg-cad-green/10 border border-cad-green/30 text-cad-green text-[10px] font-bold"
-                >
-                  {gloss}
-                </motion.span>
-              ))
+            <div className="flex flex-wrap items-end gap-2 min-h-[48px]">
+              {wordEntries.length === 0 ? (
+                <p className="text-[10px] text-cad-muted italic uppercase">FINGERSPELL A WORD — EACH STABLE LETTER LANDS HERE...</p>
+              ) : (
+                wordEntries.map((entry, i) => (
+                  <motion.span
+                    key={i}
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className="flex flex-col items-center px-2.5 py-1 bg-cad-green/10 border border-cad-green/30 text-cad-green"
+                  >
+                    <span className="text-base font-black leading-none">{entry.letter}</span>
+                    <span className="text-[8px] text-cad-green/60 mt-0.5">{(entry.confidence * 100).toFixed(0)}%</span>
+                  </motion.span>
+                ))
+              )}
+            </div>
+            {wordEntries.length > 0 && (
+              <p className="mt-3 text-2xl font-black tracking-[0.3em] text-white uppercase break-all">
+                {wordEntries.map(entry => entry.letter).join('')}
+              </p>
             )}
+            <div className="mt-3 p-2 bg-cad-amber/10 border border-cad-amber/20 flex gap-2">
+              <Info className="w-3 h-3 text-cad-amber shrink-0" />
+              <p className="text-[8px] text-cad-amber/60 leading-relaxed uppercase">
+                HOLD A STEADY HANDSHAPE FOR ~1.5S TO REPEAT THE LAST LETTER (DOUBLE LETTERS). J AND Z ARE DRAWN WITH MOTION — BEST EFFORT FROM FRAMES. CHIP % IS PER-LETTER CONFIDENCE.
+              </p>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="bg-cad-surface border border-cad-border p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-cad-muted">GLOSSES DETECTED (V-TO-G)</h3>
+                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-cad-amber/10 border border-cad-amber/20 rounded-none text-[8px] font-bold text-cad-amber uppercase tracking-widest">
+                  NO GEMINI KEY — HEURISTIC PREVIEW
+                </div>
+                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-cad-red/10 border border-cad-red/20 rounded-none text-[8px] font-bold text-cad-red uppercase tracking-widest animate-pulse">
+                  <div className="w-1 h-1 bg-cad-red rounded-none" />
+                  LIVE
+                </div>
+              </div>
+              <button
+                onClick={() => setGlossBuffer([])}
+                className="text-[9px] font-bold text-cad-amber uppercase hover:underline"
+              >
+                CLEAR BUFFER
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2 min-h-[40px]">
+              {glossBuffer.length === 0 ? (
+                <p className="text-[10px] text-cad-muted italic uppercase">PERFORM SIGNS TO POPULATE BUFFER...</p>
+              ) : (
+                glossBuffer.map((gloss, i) => (
+                  <motion.span
+                    key={i}
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className="px-2 py-0.5 bg-cad-green/10 border border-cad-green/30 text-cad-green text-[10px] font-bold"
+                  >
+                    {gloss}
+                  </motion.span>
+                ))
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="col-span-12 lg:col-span-4 flex flex-col gap-4">

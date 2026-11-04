@@ -12,6 +12,7 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "type-check": "tsc --noEmit",
+    "test": "tsx --test src/lib/__tests__/fingerspell.test.ts",
     "security-audit": "npm audit --production"
   },
   "dependencies": {
