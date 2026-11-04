@@ -88,6 +88,24 @@ docker build -f Dockerfile.production -t u1/ems-guardian:local .
 
 See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) and [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) before any deployment.
 
+## Demo build
+
+`npm run build:demo` produces an installable PWA demo of the field app for demos and field trials of the UX. It is a separate build flag, not a deployment tier:
+
+```bash
+npm run build:demo
+npm run preview   # serve dist/ locally, or host dist/ on any static server
+```
+
+What `VITE_DEMO_MODE=true` changes (production builds — plain `npm run build` — are unaffected):
+
+- No production init: the auth/audit/security initialization path (`src/lib/productionInit.ts`) is skipped, so the app opens straight into the field UI with no sign-in step.
+- A non-dismissible **Demo · Sample Data** badge marks every screen, including AR HUD.
+- Seeded sample dispatch data populates the comms panel on first open — no live dispatch, no real PHI.
+- PWA plumbing is injected into `index.html`: the web manifest (`public/manifest.webmanifest`, standalone display, `#070B12` theme) and registration of `public/sw.js`, which cache-first serves the app shell and runtime-caches MediaPipe model files and map tiles so the ASL translator and maps keep working offline after first load. Install it from the browser's install prompt over HTTPS.
+
+**Key-exposure note:** like every build of this app, the demo bundle bakes `GEMINI_API_KEY` (and any ElevenLabs key) into the client JavaScript at build time. Anyone loading a public demo URL can extract those keys with browser devtools. Before hosting a public demo, create provider-side keys with spend caps and budget alerts — the static demo cannot rate-limit them server-side. Production deployments are equally client-baked; keys are supplied at build time via the environment, never committed.
+
 ## Production gates
 
 A deployment is not considered production-approved merely because the application builds.

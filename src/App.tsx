@@ -33,6 +33,7 @@ import { generateSimulatorScenario, generateImage, generateHandoffReport, getCro
 import { cn } from './lib/utils';
 import { AGENCY_CONFIG, getSystemPrompt, type Agency } from './constants/agency';
 import { announce } from './services/elevenLabsService';
+import { isDemoMode, DEMO_MISSION_SEED } from './lib/demoMode';
 
 type AppMode = 'FIELD' | 'TRAINING' | 'REPORT' | 'ASL' | 'TRANSLATOR';
 type MissionStatus = 'EN_ROUTE' | 'ON_SCENE';
@@ -231,6 +232,10 @@ SCENE ANALYSIS & HAZARD DETECTION (CRITICAL):
   };
 
   const [hasSafetyAlert, setHasSafetyAlert] = useState(false);
+
+  // Demo builds open on a seeded sample dispatch so the comms panel is never
+  // empty on first open; a live transcript always takes precedence.
+  const displayTranscript = fieldTranscript.length > 0 ? fieldTranscript : isDemoMode ? DEMO_MISSION_SEED : [];
 
   useEffect(() => {
     if (fieldTranscript.length > 0) {
@@ -517,13 +522,13 @@ SCENE ANALYSIS & HAZARD DETECTION (CRITICAL):
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar font-mono text-[11px]">
-                          {fieldTranscript.length === 0 ? (
+                          {displayTranscript.length === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center opacity-10">
                               <Activity className="w-8 h-8 mb-2" />
                               <p className="text-[10px] uppercase">Awaiting Data...</p>
                             </div>
                           ) : (
-                            fieldTranscript.map((entry, i) => (
+                            displayTranscript.map((entry, i) => (
                               <motion.div
                                 key={i}
                                 initial={{ opacity: 0 }}
@@ -741,6 +746,16 @@ SCENE ANALYSIS & HAZARD DETECTION (CRITICAL):
       </main>
 
       <SupportAssistant />
+
+      {/* Non-dismissible demo marker — rendered only in demo builds. */}
+      {isDemoMode && (
+        <div
+          aria-label="Demo build — sample data only"
+          className="fixed bottom-2 left-2 z-[60] border border-cad-amber/60 bg-cad-amber/10 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.2em] text-cad-amber pointer-events-none select-none"
+        >
+          Demo · Sample Data
+        </div>
+      )}
 
       <style dangerouslySetInnerHTML={{ __html: `
         .custom-scrollbar::-webkit-scrollbar {

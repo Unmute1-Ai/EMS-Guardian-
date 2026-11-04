@@ -11,6 +11,7 @@ import auditLogger from './auditLogger';
 import authManager from './authManager';
 import { errorHandler } from './errorHandler';
 import { configManager } from './productionConfig';
+import { isDemoMode } from './demoMode';
 
 export interface InitializationStatus {
   security: boolean;
@@ -35,6 +36,14 @@ class ProductionInitializer {
    * Initialize all production systems
    */
   public async initialize(): Promise<InitializationStatus> {
+    if (isDemoMode) {
+      // Demo builds skip production auth/audit initialization entirely: the
+      // demo has no sign-in gate and holds sample data only, so the security
+      // stack (encryption/HIPAA/audit/auth checks) is never engaged.
+      console.log('DEMO MODE — production init skipped (no auth/audit initialization)');
+      return this.status;
+    }
+
     try {
       console.log('🔐 Initializing EMS Guardian Production Environment...');
 
