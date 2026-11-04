@@ -1,13 +1,24 @@
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// Constructed on first use: without a baked key (e.g. a demo build before keys
+// are injected) the SDK throws at construction — eagerly that takes the whole
+// app down at module-evaluation time. With a key present, behavior is
+// identical; without one, AI calls reject cleanly and the field UI stays up.
+let aiInstance: GoogleGenAI | null = null;
+
+function getAi(): GoogleGenAI {
+  if (!aiInstance) {
+    aiInstance = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  }
+  return aiInstance;
+}
 
 export async function generateSimulatorScenario(userAction?: string, history: any[] = []) {
   const prompt = userAction 
     ? `The trainee did: "${userAction}". Continue the EMS simulation. Provide feedback on their action and describe the next state of the patient. Include a visual description for an image generation.`
     : `Start a new realistic EMS emergency scenario. Describe the scene and the patient's initial presentation. Include a visual description for an image generation.`;
 
-  const response = await ai.models.generateContent({
+  const response = await getAi().models.generateContent({
     model: "gemini-3-flash-preview",
     contents: [...history, { role: 'user', parts: [{ text: prompt }] }],
     config: {
@@ -19,7 +30,7 @@ export async function generateSimulatorScenario(userAction?: string, history: an
 }
 
 export async function generateImage(prompt: string) {
-  const response = await ai.models.generateContent({
+  const response = await getAi().models.generateContent({
     model: 'gemini-2.5-flash-image',
     contents: [{ parts: [{ text: `EMS training scene: ${prompt}. Professional, realistic, medical context.` }] }],
     config: {
@@ -38,7 +49,7 @@ export async function generateImage(prompt: string) {
 }
 
 export async function generateHandoffReport(input: string) {
-  const response = await ai.models.generateContent({
+  const response = await getAi().models.generateContent({
     model: "gemini-3-flash-preview",
     contents: [{ role: 'user', parts: [{ text: `Generate a professional EMS handoff report based on these notes: ${input}` }] }],
     config: {
@@ -50,7 +61,7 @@ export async function generateHandoffReport(input: string) {
 }
 
 export async function translateGlosstoEnglish(glosses: string[]) {
-  const response = await ai.models.generateContent({
+  const response = await getAi().models.generateContent({
     model: "gemini-3.1-pro-preview",
     contents: [{ role: 'user', parts: [{ text: `Translate these ASL glosses into natural, professional English: ${glosses.join(' ')}` }] }],
     config: {
@@ -62,7 +73,7 @@ export async function translateGlosstoEnglish(glosses: string[]) {
 }
 
 export async function translateEnglishtoASL(text: string) {
-  const response = await ai.models.generateContent({
+  const response = await getAi().models.generateContent({
     model: "gemini-3.1-pro-preview",
     contents: [{ role: 'user', parts: [{ text: `Convert this English sentence into ASL Glosses: ${text}` }] }],
     config: {
@@ -74,7 +85,7 @@ export async function translateEnglishtoASL(text: string) {
 }
 
 export async function findClosestHospital(lat: number, lng: number) {
-  const response = await ai.models.generateContent({
+  const response = await getAi().models.generateContent({
     model: "gemini-2.5-flash",
     contents: "Find the closest hospitals with emergency rooms to my current location. List their names, addresses, and estimated travel time if possible.",
     config: {
@@ -93,7 +104,7 @@ export async function findClosestHospital(lat: number, lng: number) {
 }
 
 export async function getCrossStreets(lat: number, lng: number) {
-  const response = await ai.models.generateContent({
+  const response = await getAi().models.generateContent({
     model: "gemini-2.5-flash",
     contents: "Identify the closest major cross streets to these coordinates. Return ONLY the cross streets in the format 'STREET A & STREET B'.",
     config: {

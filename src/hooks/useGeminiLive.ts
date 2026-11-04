@@ -21,9 +21,12 @@ export function useGeminiLive(customInstruction?: string, onHazardsDetected?: (h
     if (status === 'connected') return;
     
     setStatus('connecting');
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
     try {
+      // Constructed inside the try so a keyless build fails cleanly into the
+      // error status instead of an unhandled promise rejection.
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
       const session = await ai.live.connect({
         model: "gemini-2.5-flash-native-audio-preview-12-2025",
         config: {
