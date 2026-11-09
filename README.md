@@ -18,6 +18,12 @@ EMS Guardian combines an accessible field interface, translation/ASL support, st
 - **Security controls in code/configuration** including authentication, rate limiting, audit-oriented utilities, and secure-header configuration.
 - **Combined site**: static marketing pages in `public/` — the Unmute1ai hub at `/welcome/`, Argus Responder at `/argus/`, and U1 AccessGuard at `/accessguard/` — copied verbatim into `dist/` by the build.
 
+## Communication pilot (`/pilot/`)
+
+`public/pilot/` is the crew-facing pilot: a phone-first, on-device communication aid (show text, point board, English/Spanish phrases, beta live captions, built-in feedback form). It is one self-contained HTML file with no build step, no dependencies, no API keys and no network requests; a Content-Security-Policy in the page blocks outbound connections. Patient input lives in memory only. It deploys on its own (Vercel root directory `public/pilot`) and stays isolated from the AI field app at `/`, which is desktop-layout and needs cloud keys.
+
+Not a medical device, gives no medical guidance, and does not replace a qualified interpreter. Live captions use the browser's speech recognition, which may send audio to the browser vendor; it is off until a crew member accepts the notice.
+
 ## Safety boundary
 
 EMS Guardian must not be treated as an autonomous clinical authority. AI output is advisory. The application must not represent generated content as an official emergency directive, medical order, diagnosis, or authenticated dispatch message unless the relevant external authority integration has been separately implemented and verified.
