@@ -69,29 +69,10 @@ export async function generateHandoffReport(input: string) {
   return response.text;
 }
 
-export async function translateGlosstoEnglish(glosses: string[]) {
-  const response = await getAi().models.generateContent({
-    model: "gemini-3.1-pro-preview",
-    contents: [{ role: 'user', parts: [{ text: `Translate these ASL glosses into natural, professional English: ${glosses.join(' ')}` }] }],
-    config: {
-      systemInstruction: "You are the NVIDIA Nemotron linguistic bridge. Convert ASL Glosses (V-to-G output) into fluent, natural English. Be concise and accurate.",
-    }
-  });
-
-  return response.text;
-}
-
-export async function translateEnglishtoASL(text: string) {
-  const response = await getAi().models.generateContent({
-    model: "gemini-3.1-pro-preview",
-    contents: [{ role: 'user', parts: [{ text: `Convert this English sentence into ASL Glosses: ${text}` }] }],
-    config: {
-      systemInstruction: "You are the NVIDIA Nemotron linguistic bridge. Convert English text into ASL Glosses for an avatar to perform. Use standard ASL syntax (Time-Topic-Comment).",
-    }
-  });
-
-  return response.text;
-}
+// Gloss↔English translation (the "NEMOTRON BRIDGE" UI stage) now lives in
+// nemotronService.ts and actually calls NVIDIA Nemotron via NIM, matching
+// the HUD label. ASLTranslator imports those two functions directly from
+// that module.
 
 export async function findClosestHospital(lat: number, lng: number) {
   const response = await getAi().models.generateContent({
