@@ -5,7 +5,7 @@ import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
 import { HAND_CONNECTIONS } from '@mediapipe/hands';
 import { motion, AnimatePresence } from 'motion/react';
 import { Languages, RefreshCw, Info, Delete, Trash2 } from 'lucide-react';
-import { translateGlosstoEnglish, translateEnglishtoASL } from '../services/geminiService';
+import { translateGlosstoEnglish, translateEnglishtoASL } from '../services/nemotronService';
 import { cn } from '../lib/utils';
 import { buildFeatureVector, LandmarkFrame } from '../lib/aslFeatures';
 import { classify, hasClassifierModel } from '../lib/aslClassifier';

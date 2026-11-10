@@ -34,6 +34,8 @@ export default defineConfig(({mode}) => {
     plugins: [react(), tailwindcss(), demoPwaPlugin],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+      'process.env.NVIDIA_API_KEY': JSON.stringify(env.NVIDIA_API_KEY),
+      'process.env.NVIDIA_NIM_MODEL': JSON.stringify(env.NVIDIA_NIM_MODEL),
     },
     resolve: {
       alias: {
